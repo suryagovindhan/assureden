@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShieldQA Enterprise - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/login.css">
+</head>
+
+<body class="login-body">
+    <div class="login-container">
+        <div class="login-header">
+            <h2>ShieldQA</h2>
+            <span class="badge">Enterprise</span>
+            <p>Sign in to the PAM/IAM Testing Platform</p>
+        </div>
+
+        <form id="loginForm" class="login-form">
+            <div id="errorMsg" class="error-banner" style="display: none;"></div>
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required placeholder="admin">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="action-btn primary login-btn">Sign In</button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('errorMsg');
+            const submitBtn = document.querySelector('.login-btn');
+
+            errorMsg.style.display = 'none';
+            submitBtn.textContent = 'Authenticating...';
+            submitBtn.disabled = true;
+
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('access_token', data.access_token);
+                    window.location.href = '/';
+                } else {
+                    const error = await response.json();
+                    errorMsg.textContent = error.detail || 'Authentication failed';
+                    errorMsg.style.display = 'block';
+                }
+            } catch (err) {
+                errorMsg.textContent = 'Network error connecting to auth server.';
+                errorMsg.style.display = 'block';
+            } finally {
+                submitBtn.textContent = 'Sign In';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

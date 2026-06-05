@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IAM SSO Test - ShieldQA Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .form-panel {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: white;
+            font-family: var(--font-main);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        {% set active = 'iam-sso' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="breadcrumb">IAM Modules / SSO Flow Test</div>
+                <div class="user-profile">
+                    <span class="status online"></span>
+                    <span id="currentUserName">Loading...</span>
+                    <a href="/login" onclick="localStorage.removeItem('access_token')"
+                        style="margin-left:15px;color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">[Logout]</a>
+                </div>
+            </header>
+            <div class="content-wrapper">
+                <div style="margin-bottom:28px;">
+                    <h2>Initiate SSO Verification</h2>
+                    <p style="color:var(--text-secondary);margin-top:6px;">Configure the Identity Provider and test
+                        parameters to validate the SSO login flow.</p>
+                </div>
+                <div class="split-layout">
+                    <div class="form-panel">
+                        <form id="ssoForm">
+                            <div class="form-group">
+                                <label>SSO Portal URL</label>
+                                <input type="url" id="targetUrl" value="https://sso.shieldqa.local/login" required>
+                            </div>
+                            <div class="form-group">
+                                <label>IdP Type</label>
+                                <select id="idpType">
+                                    <option value="entra">Microsoft Entra ID (Azure AD)</option>
+                                    <option value="okta">Okta</option>
+                                    <option value="ping">Ping Identity</option>
+                                    <option value="adfs">ADFS</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Test User Account</label>
+                                <input type="text" id="testUser" value="testuser@shieldqa.local">
+                            </div>
+                            <button type="button" class="action-btn primary" onclick="runSSOTest()">Dispatch Test to
+                                Agent</button>
+                        </form>
+                    </div>
+                    <div class="logs-panel">
+                        <h3>Test Execution Log</h3>
+                        <div class="terminal-container" id="terminal">
+                            <div class="log-line sys">Ready. Configure and dispatch a test above.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const token = localStorage.getItem('access_token');
+        if (!token) window.location.href = '/login';
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        fetch('/auth/me', { headers }).then(r => r.json()).then(u => { document.getElementById('currentUserName').textContent = u.username; });
+
+        let ws;
+        const terminal = document.getElementById('terminal');
+        function logToTerminal(msg, type) {
+            const d = document.createElement('div'); d.className = `log-line ${type}`;
+            d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            terminal.appendChild(d); terminal.scrollTop = terminal.scrollHeight;
+        }
+        function initWS() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws/agent/dashboard-listener`);
+            ws.onmessage = e => logToTerminal(e.data, 'msg');
+            ws.onopen = () => logToTerminal('Connected to server.', 'sys');
+        }
+        async function runSSOTest() {
+            const targetUrl = document.getElementById('targetUrl').value;
+            logToTerminal(`Initiating SSO test on ${targetUrl}…`, 'sys');
+            try {
+                await fetch('/api/iam/test-sso', { method: 'POST', headers });
+                const cmd = { domain: 'IAM', action: 'test-sso', target_url: targetUrl };
+                ws.send(JSON.stringify(cmd));
+                logToTerminal(`Command dispatched → ${JSON.stringify(cmd)}`, 'sys');
+            } catch (e) { logToTerminal(`Error: ${e.message}`, 'err'); }
+        }
+        window.onload = initWS;
+    </script>
+</body>
+
+</html>

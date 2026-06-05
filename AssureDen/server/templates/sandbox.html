@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Recorder Sandbox — AssureDen</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <style>
+        /* ── Layout ────────────────────────────────────────── */
+        .sandbox-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 16px;
+            height: calc(100vh - 100px);
+            padding: 16px 20px;
+        }
+        /* ── Panel ─────────────────────────────────────────── */
+        .sb-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sb-panel-header {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+        .sb-panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+        }
+        .sb-panel-body::-webkit-scrollbar { width: 4px; }
+        .sb-panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* ── Status dot ────────────────────────────────────── */
+        .rec-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--border); display: inline-block;
+            transition: background .3s;
+        }
+        .rec-dot.ready     { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+        .rec-dot.recording { background: #f85149; box-shadow: 0 0 6px #f85149; animation: blink 1s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+        /* ── Form ──────────────────────────────────────────── */
+        .fg { margin-bottom: 10px; }
+        .fg label { display: block; font-size: 0.73rem; color: var(--text-secondary); margin-bottom: 3px; font-weight: 500; }
+        .fg select, .fg input {
+            width: 100%;
+            background: var(--bg-main, #0d1117);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 7px 10px;
+            font-size: 0.82rem;
+        }
+        .fg select:focus, .fg input:focus { outline: none; border-color: var(--accent, #58a6ff); }
+
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+        /* ── Step cards ────────────────────────────────────── */
+        .step-card {
+            background: rgba(0,0,0,.25);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        .step-card:hover { border-color: var(--border-hover, #444); }
+        .step-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px; cursor: pointer; user-select: none;
+        }
+        .step-seq { font-size: 0.68rem; color: var(--text-secondary); font-weight: 700; min-width: 22px; }
+        .step-action { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+        .action-CLICK    { background: rgba(88,166,255,.12); color: #58a6ff; }
+        .action-FILL     { background: rgba(63,185,80,.12);  color: #3fb950; }
+        .action-NAVIGATE { background: rgba(210,153,34,.12); color: #d29922; }
+        .action-SELECT   { background: rgba(163,113,247,.12);color: #a371f7; }
+        .step-label { font-size: 0.78rem; color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .step-detail { padding: 0 12px 10px; display: none; }
+        .step-detail.open { display: block; }
+        .locator-list { margin: 4px 0; padding: 0; list-style: none; }
+        .locator-list li { font-size: 0.7rem; font-family: monospace; color: var(--text-secondary); padding: 2px 0; }
+        .locator-list li.primary { color: #58a6ff; }
+        .locator-list li::before { content: '↳ '; }
+        .steps-empty { color: var(--text-secondary); font-size: 0.82rem; text-align: center; padding: 40px 20px; }
+
+        /* ── Step Editing UI ────────────────────────────────── */
+        .step-edit-form { padding: 8px 12px 12px; border-top: 1px solid var(--border); background: rgba(88,166,255,0.03); display: none; }
+        .step-edit-form.open { display: block; }
+        .edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        .edit-full { margin-bottom: 8px; }
+        .edit-label { font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; }
+        .edit-input { width: 100%; background: #0d1117; border: 1px solid var(--border); border-radius: 4px; color: #fff; padding: 4px 8px; font-size: 0.75rem; }
+        .edit-input:focus { border-color: var(--accent); outline: none; }
+        .btn-mini { padding: 3px 8px; font-size: 0.68rem; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); }
+        .btn-mini:hover { border-color: var(--accent); }
+        .btn-mini.save { background: var(--accent); color: #fff; border: none; }
+
+        .manual-text { font-size: 0.75rem; color: var(--text-primary); margin: 4px 0 8px; line-height: 1.4; font-style: italic; }
+        .edit-toggle { cursor: pointer; color: var(--text-secondary); font-size: 0.7rem; margin-left: auto; transition: color .2s; }
+        .edit-toggle:hover { color: var(--accent); }
+
+        /* ── Right column ──────────────────────────────────── */
+        .right-col {
+            grid-column: 2;
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .codegen-panel { flex: 1; }
+        .log-panel { height: 190px; flex-shrink: 0; }
+
+        pre.code-out {
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.73rem; color: #79c0ff; margin: 0;
+            white-space: pre-wrap; line-height: 1.65;
+        }
+        .log-line { font-size: 0.76rem; line-height: 1.7; }
+        .log-sys  { color: var(--text-secondary); }
+        .log-ok   { color: #3fb950; }
+        .log-err  { color: #f85149; }
+        .log-step { color: #a371f7; }
+
+        /* ── Save Modal ───────────────────────────────────── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.7); z-index: 999;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 24px; width: 460px;
+        }
+        .modal-box h3 { margin: 0 0 16px; font-size: 1rem; }
+        .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+
+    {% set active = 'sandbox' %}
+    {% include '_sidebar.html' %}
+
+    <main class="main-content">
+        <div class="top-bar">
+            <div class="breadcrumb"><strong>Test Recorder</strong> — Sandbox</div>
+            <div class="user-info">
+                <span class="status-dot"></span>
+                <span id="userName">Loading…</span>
+                <a class="logout-link" onclick="logout()">Logout</a>
+            </div>
+        </div>
+
+        <div class="sandbox-grid">
+
+            <!-- Setup Panel (top-left) -->
+            <div class="sb-panel" style="grid-column:1;grid-row:1">
+                <div class="sb-panel-header">
+                    <span class="rec-dot" id="recDot"></span>
+                    <span id="recStatus">Connecting…</span>
+                </div>
+                <div class="sb-panel-body">
+                    <div class="fg">
+                        <label>Project</label>
+                        <select id="selProject" onchange="loadEnvs()"><option value="">— Select —</option></select>
+                    </div>
+                    <div class="fg">
+                        <label>Environment</label>
+                        <select id="selEnv"><option value="">— Select —</option></select>
+                    </div>
+                    <div class="fg">
+                        <label>Start URL</label>
+                        <input id="sessionUrl" type="url" placeholder="https://app.company.local">
+                    </div>
+                    <div class="fg">
+                        <label>Module (for saving)</label>
+                        <select id="selModule"><option value="">— Select module —</option></select>
+                    </div>
+                    <div class="fg">
+                        <label>Test Case Name</label>
+                        <input id="caseName" placeholder="e.g. Valid PAM Login">
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btnLaunch" onclick="launchRecorder()">▶ Start Recording</button>
+                    <button class="btn" style="background:#f85149;color:#fff" id="btnStop" onclick="stopRecorder()" style="display:none">⏹ Stop</button>
+                    <button class="btn btn-success" id="btnSave" onclick="openSaveModal()" style="display:none">💾 Save</button>
+                </div>
+            </div>
+
+            <!-- Captured Steps (bottom-left) -->
+            <div class="sb-panel" style="grid-column:1;grid-row:2">
+                <div class="sb-panel-header" style="justify-content:space-between">
+                    <span>🎯 Captured Steps</span>
+                    <span id="stepCount" style="font-size:0.73rem">0 steps</span>
+                </div>
+                <div class="sb-panel-body" id="stepsContainer">
+                    <div class="steps-empty" id="stepsEmpty">Steps appear here as you interact with the browser.</div>
+                </div>
+            </div>
+
+            <!-- Right column -->
+            <div class="right-col">
+                <!-- Script preview -->
+                <div class="sb-panel codegen-panel">
+                    <div class="sb-panel-header" style="justify-content:space-between">
+                        <span>🧬 Generated Script</span>
+                        <button class="btn" style="padding:3px 10px;font-size:0.7rem;background:transparent;border:1px solid var(--border);color:var(--text-secondary)" onclick="copyScript()">Copy</button>
+                    </div>
+                    <div class="sb-panel-body">
+                        <pre class="code-out" id="codegenOutput"># Script appears here after you stop recording.</pre>
+                    </div>
+                </div>
+                <!-- Log -->
+                <div class="sb-panel log-panel">
+                    <div class="sb-panel-header">📡 Recorder Log</div>
+                    <div class="sb-panel-body" id="agentLog">
+                        <div class="log-line log-sys">[Sandbox] Waiting for connection…</div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- end sandbox-grid -->
+    </main>
+</div>
+
+<!-- Save Modal -->
+<div class="modal-overlay" id="saveModal">
+    <div class="modal-box">
+        <h3>💾 Save as Test Case</h3>
+        <div class="fg"><label>Case Name</label><input id="modalName"></div>
+        <div class="fg"><label>Module</label><select id="modalModule"><option value="">— Select —</option></select></div>
+        <div class="fg"><label>Priority</label>
+            <select id="modalPriority">
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM" selected>MEDIUM</option>
+                <option value="LOW">LOW</option>
+            </select>
+        </div>
+        <div id="modalInfo" style="font-size:0.76rem;color:var(--text-secondary);margin-top:6px"></div>
+        <div class="modal-footer">
+            <button class="btn" style="background:transparent;border:1px solid var(--border);color:var(--text-secondary)" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-success" onclick="saveTestCase()">Save Test Case</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Auth ────────────────────────────────────────────────────────────────────
+const TOKEN = localStorage.getItem('ad_token');
+if (!TOKEN) window.location.href = '/login';
+const AUTH = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+
+function logout() { localStorage.removeItem('ad_token'); window.location.href = '/login'; }
+
+fetch('/api/auth/me', { headers: AUTH })
+    .then(r => r.json())
+    .then(u => document.getElementById('userName').textContent = u.username)
+    .catch(() => {});
+
+// ── State ───────────────────────────────────────────────────────────────────
+let _ws, _steps = [], _script = '', _recording = false;
+
+// ── Step Logic Utilities ────────────────────────────────────────────────────
+function generateManualInstruction(step) {
+    const action = step.action;
+    const label  = step.fallback_metadata?.label || step.fallback_metadata?.inner_text || 'element';
+    
+    if (action === 'NAVIGATE') return `Navigate to ${step.input_reference}`;
+    if (action === 'CLICK') return `Click on the "${label.substring(0, 30)}" ${step.fallback_metadata?.tag_name || 'element'}`;
+    if (action === 'FILL') {
+        const value = step.input_source_type === 'GENERATOR' ? `a random ${step.input_reference}` : `"${step.input_reference}"`;
+        return `Enter ${value} into the "${label.substring(0, 30)}" field`;
+    }
+    if (action === 'SELECT') return `Select "${step.input_reference}" from the "${label.substring(0, 30)}" dropdown`;
+    return `${action} on ${label}`;
+}
+
+// ── Utilities ───────────────────────────────────────────────────────────────
+function log(msg, cls = 'log-sys') {
+    const el = document.getElementById('agentLog');
+    const d  = document.createElement('div');
+    d.className  = 'log-line ' + cls;
+    d.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(state) { // 'off' | 'ready' | 'recording'
+    const dot  = document.getElementById('recDot');
+    const text = document.getElementById('recStatus');
+    dot.className = 'rec-dot ' + (state === 'ready' ? 'ready' : state === 'recording' ? 'recording' : '');
+    text.textContent = state === 'ready' ? 'Ready' : state === 'recording' ? 'Recording…' : 'Disconnected';
+}
+
+// ── WebSocket ───────────────────────────────────────────────────────────────
+function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    _ws = new WebSocket(`${proto}//${location.host}/ws/sandbox`);
+    _ws.onopen  = () => { setStatus('ready'); log('Connected to sandbox server.', 'log-ok'); };
+    _ws.onclose = () => { setStatus('off');  log('Disconnected — reconnecting in 3s…', 'log-err'); setTimeout(connectWS, 3000); };
+    _ws.onerror = () => log('WebSocket error.', 'log-err');
+    _ws.onmessage = e => {
+        try { handleMsg(JSON.parse(e.data)); } catch { log(e.data); }
+    };
+}
+
+function handleMsg(msg) {
+    if (msg.type === 'ack') {
+        log(msg.message, 'log-ok');
+    } else if (msg.type === 'codegen_line') {
+        log(msg.line, msg.line.includes('✓') || msg.line.includes('launched') ? 'log-ok' : 'log-sys');
+    } else if (msg.type === 'recorded_step') {
+        // Enhance step with manual instruction if missing
+        if (!msg.step.manual_instruction) {
+            msg.step.manual_instruction = generateManualInstruction(msg.step);
+        }
+        _steps.push(msg.step);
+        addStepCard(msg.step, _steps.length);
+        log(`Step ${_steps.length}: ${msg.step.action} captured`, 'log-step');
+    } else if (msg.type === 'codegen_script') {
+        _script = msg.script;
+        document.getElementById('codegenOutput').textContent = msg.script;
+    } else if (msg.type === 'all_steps') {
+        _steps = msg.steps;
+        finishRecording();
+    } else if (msg.type === 'error') {
+        log('Error: ' + msg.detail, 'log-err');
+    }
+}
+
+function finishRecording() {
+    _recording = false;
+    setStatus('ready');
+    document.getElementById('btnLaunch').style.display = 'inline-flex';
+    document.getElementById('btnStop').style.display   = 'none';
+    if (_steps.length > 0) {
+        document.getElementById('btnSave').style.display = 'inline-flex';
+        log(`Done. ${_steps.length} step(s) captured and ready to save.`, 'log-ok');
+    } else {
+        log('No steps were captured.', 'log-err');
+    }
+}
+
+// ── Step Cards ──────────────────────────────────────────────────────────────
+function addStepCard(step, seq) {
+    const e = document.getElementById('stepsEmpty');
+    if (e) e.remove();
+    const c   = document.getElementById('stepsContainer');
+    const locs = step.ranked_locators || [];
+    const label = step.fallback_metadata?.label || locs[0] || step.action;
+
+    const card = document.createElement('div');
+    card.id = `step-card-${seq}`;
+    card.className = 'step-card';
+    
+    // We store the step object reference on the element for easy editing
+    card._step_data = step; 
+
+    const renderCard = (s) => {
+        const isFill = s.action === 'FILL';
+        const isGen  = s.input_source_type === 'GENERATOR';
+        
+        return `
+          <div class="step-header">
+            <span class="step-seq">#${seq}</span>
+            <span class="step-action action-${s.action}">${s.action}</span>
+            <span class="step-label" title="${label}">${label}</span>
+            <span class="edit-toggle" onclick="toggleEdit(${seq})">Edit ✎</span>
+          </div>
+          <div class="step-detail open" id="detail-${seq}">
+            <div class="manual-text" id="manual-display-${seq}">${s.manual_instruction || 'No instructions.'}</div>
+            
+            <div class="step-edit-form" id="edit-form-${seq}">
+                <div class="edit-full">
+                    <div class="edit-label">Manual Instruction</div>
+                    <textarea class="edit-input" id="edit-manual-${seq}" rows="2">${s.manual_instruction || ''}</textarea>
+                </div>
+                <div class="edit-row">
+                    <div>
+                        <div class="edit-label">Action</div>
+                        <select class="edit-input" id="edit-action-${seq}">
+                            <option value="CLICK" ${s.action === 'CLICK' ? 'selected' : ''}>CLICK</option>
+                            <option value="FILL" ${s.action === 'FILL' ? 'selected' : ''}>FILL</option>
+                            <option value="NAVIGATE" ${s.action === 'NAVIGATE' ? 'selected' : ''}>NAVIGATE</option>
+                            <option value="SELECT" ${s.action === 'SELECT' ? 'selected' : ''}>SELECT</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="edit-label">Data Source</div>
+                        <select class="edit-input" id="edit-source-${seq}" onchange="toggleGenUI(${seq})">
+                            <option value="FIXED" ${s.input_source_type !== 'GENERATOR' ? 'selected' : ''}>Fixed Value</option>
+                            <option value="GENERATOR" ${isGen ? 'selected' : ''}>Random Generator</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="edit-full">
+                    <div class="edit-label" id="val-label-${seq}">${isGen ? 'Generator Type' : 'Value'}</div>
+                    ${isGen ? `
+                        <select class="edit-input" id="edit-val-${seq}">
+                            <option value="RANDOM_EMAIL" ${s.input_reference === 'RANDOM_EMAIL' ? 'selected' : ''}>Random Email</option>
+                            <option value="RANDOM_NAME" ${s.input_reference === 'RANDOM_NAME' ? 'selected' : ''}>Random Name</option>
+                            <option value="RANDOM_STRING" ${s.input_reference === 'RANDOM_STRING' ? 'selected' : ''}>Random String</option>
+                            <option value="RANDOM_NUMBER" ${s.input_reference === 'RANDOM_NUMBER' ? 'selected' : ''}>Random Number</option>
+                        </select>
+                    ` : `
+                        <input class="edit-input" id="edit-val-${seq}" value="${s.input_reference || ''}">
+                    `}
+                </div>
+                <div style="display:flex; gap:8px; justify-content: flex-end">
+                    <button class="btn-mini" onclick="toggleEdit(${seq})">Cancel</button>
+                    <button class="btn-mini save" onclick="saveStepEdit(${seq})">Apply Changes</button>
+                </div>
+            </div>
+
+            <div id="meta-info-${seq}" style="border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px">
+                <div style="font-size:0.65rem;color:var(--text-secondary);margin-bottom:3px">Automation Locators:</div>
+                <ul class="locator-list">
+                  ${locs.map((l,i) => `<li class="${i===0?'primary':''}">${l}</li>`).join('')}
+                </ul>
+            </div>
+          </div>`;
+    };
+
+    card.innerHTML = renderCard(step);
+    c.appendChild(card);
+    c.scrollTop = c.scrollHeight;
+    document.getElementById('stepCount').textContent = seq + ' step' + (seq !== 1 ? 's' : '');
+}
+
+function toggleEdit(seq) {
+    const form = document.getElementById(`edit-form-${seq}`);
+    const meta = document.getElementById(`meta-info-${seq}`);
+    const disp = document.getElementById(`manual-display-${seq}`);
+    form.classList.toggle('open');
+    if (form.classList.contains('open')) {
+        meta.style.display = 'none';
+        disp.style.display = 'none';
+    } else {
+        meta.style.display = 'block';
+        disp.style.display = 'block';
+    }
+}
+
+function toggleGenUI(seq) {
+    const src = document.getElementById(`edit-source-${seq}`).value;
+    const valContainer = document.getElementById(`val-label-${seq}`).parentElement;
+    const isGen = src === 'GENERATOR';
+    
+    document.getElementById(`val-label-${seq}`).textContent = isGen ? 'Generator Type' : 'Value';
+    
+    if (isGen) {
+        valContainer.innerHTML = `
+            <div class="edit-label" id="val-label-${seq}">Generator Type</div>
+            <select class="edit-input" id="edit-val-${seq}">
+                <option value="RANDOM_EMAIL">Random Email</option>
+                <option value="RANDOM_NAME">Random Name</option>
+                <option value="RANDOM_STRING">Random String</option>
+                <option value="RANDOM_NUMBER">Random Number</option>
+            </select>`;
+    } else {
+        valContainer.innerHTML = `
+            <div class="edit-label" id="val-label-${seq}">Value</div>
+            <input class="edit-input" id="edit-val-${seq}" placeholder="Enter text...">`;
+    }
+}
+
+function saveStepEdit(seq) {
+    const card = document.getElementById(`step-card-${seq}`);
+    const s = card._step_data;
+    
+    s.action = document.getElementById(`edit-action-${seq}`).value;
+    s.manual_instruction = document.getElementById(`edit-manual-${seq}`).value;
+    s.input_source_type = document.getElementById(`edit-source-${seq}`).value;
+    s.input_reference = document.getElementById(`edit-val-${seq}`).value;
+    
+    // Refresh card content (simplified)
+    toggleEdit(seq);
+    document.getElementById(`manual-display-${seq}`).textContent = s.manual_instruction;
+    // We could re-render the whole card if action classes change, but for now this is snappy
+    log(`Step #${seq} updated manually.`);
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+function launchRecorder() {
+    const url = document.getElementById('sessionUrl').value.trim();
+    if (!url) { alert('Enter a Start URL first.'); return; }
+    _steps = []; _script = '';
+    document.getElementById('stepsContainer').innerHTML = '<div class="steps-empty" id="stepsEmpty">Interact with the browser to capture steps…</div>';
+    document.getElementById('stepCount').textContent = '0 steps';
+    document.getElementById('codegenOutput').textContent = '# Recording…';
+    document.getElementById('btnSave').style.display = 'none';
+    _ws.send(JSON.stringify({ type: 'codegen', target_url: url }));
+    _recording = true;
+    setStatus('recording');
+    log('Recorder launched → ' + url);
+    document.getElementById('btnLaunch').style.display = 'none';
+    document.getElementById('btnStop').style.display   = 'inline-flex';
+}
+
+function stopRecorder() {
+    _ws.send(JSON.stringify({ type: 'stop' }));
+    log('Stop signal sent…');
+}
+
+function copyScript() {
+    navigator.clipboard.writeText(_script)
+        .then(() => log('Script copied to clipboard.', 'log-ok'))
+        .catch(() => log('Copy failed (use HTTPS).', 'log-err'));
+}
+
+// ── Save Modal ───────────────────────────────────────────────────────────────
+function openSaveModal() {
+    document.getElementById('modalName').value = document.getElementById('caseName').value;
+    document.getElementById('modalInfo').textContent =
+        `${_steps.length} step(s) with ${_steps.filter(s=>(s.ranked_locators||[]).length>1).length} multi-locator elements.`;
+    document.getElementById('saveModal').classList.add('open');
+}
+function closeModal() { document.getElementById('saveModal').classList.remove('open'); }
+
+async function saveTestCase() {
+    const name     = document.getElementById('modalName').value.trim();
+    const moduleId = document.getElementById('modalModule').value;
+    const priority = document.getElementById('modalPriority').value;
+    if (!name)     { alert('Enter a test case name.'); return; }
+    if (!moduleId) { alert('Select a module.'); return; }
+
+    const body = {
+        module_id: moduleId, name, priority,
+        steps: _steps.map((s, i) => ({
+            sequence_order: i + 1,
+            action: s.action,
+            manual_instruction: s.manual_instruction,
+            ranked_locators: s.ranked_locators || [],
+            fallback_metadata: s.fallback_metadata || {},
+            input_source_type: s.input_source_type || 'FIXED',
+            input_reference: s.input_reference || null,
+            expected_condition: s.expected_condition || null,
+            timeout_ms: s.timeout_ms || 5000,
+            retry_policy: s.retry_policy || 2,
+        }))
+    };
+
+    const res = await fetch('/api/admin/cases', {
+        method: 'POST', headers: AUTH, body: JSON.stringify(body)
+    });
+    if (res.ok) {
+        const data = await res.json();
+        closeModal();
+        log(`✓ Saved: "${name}" with ${data.step_count} steps.`, 'log-ok');
+        document.getElementById('btnSave').style.display = 'none';
+    } else {
+        const err = await res.json().catch(() => ({}));
+        log('Save failed: ' + (err.detail || res.status), 'log-err');
+    }
+}
+
+// ── Dropdowns ────────────────────────────────────────────────────────────────
+async function loadDropdowns() {
+    const [projects, modules] = await Promise.all([
+        fetch('/api/admin/projects', { headers: AUTH }).then(r => r.json()).catch(() => []),
+        fetch('/api/admin/modules',  { headers: AUTH }).then(r => r.json()).catch(() => []),
+    ]);
+    const ps = document.getElementById('selProject');
+    projects.forEach(p => ps.add(new Option(p.name, p.id)));
+    [document.getElementById('selModule'), document.getElementById('modalModule')].forEach(el => {
+        modules.forEach(m => el.add(new Option(m.name, m.id)));
+    });
+}
+
+async function loadEnvs() {
+    const pid = document.getElementById('selProject').value;
+    const envSel = document.getElementById('selEnv');
+    envSel.innerHTML = '<option value="">— Select —</option>';
+    if (!pid) return;
+    const envs = await fetch(`/api/admin/environments?project_id=${pid}`, { headers: AUTH })
+        .then(r => r.json()).catch(() => []);
+    envs.forEach(e => envSel.add(new Option(e.name + (e.base_url ? ' — ' + e.base_url : ''), e.id)));
+    if (envs.length > 0 && envs[0].base_url) {
+        document.getElementById('sessionUrl').value = envs[0].base_url;
+    }
+}
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+connectWS();
+loadDropdowns();
+</script>
+</body>
+</html>

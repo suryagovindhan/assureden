@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — AssureDen</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0d12;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-wrap {
+            width: 380px;
+        }
+
+        .brand {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .brand .logo-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin: 0 auto 14px;
+        }
+
+        .brand h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+        }
+
+        .brand p {
+            color: #64748b;
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        .card {
+            background: #111520;
+            border: 1px solid #1e2535;
+            border-radius: 16px;
+            padding: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px 13px;
+            background: #0a0d12;
+            border: 1px solid #1e2535;
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+            font-size: 0.88rem;
+            transition: border-color 0.15s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 11px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+            margin-top: 22px;
+        }
+
+        .btn-login:hover {
+            background: #2563eb;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            margin-bottom: 16px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-wrap">
+        <div class="brand">
+            <div class="logo-icon">🛡️</div>
+            <h1>AssureDen</h1>
+            <p>PAM & IAM Enterprise Testing Platform</p>
+        </div>
+        <div class="card">
+            <div class="error" id="errorMsg"></div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="admin" autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button class="btn-login" onclick="doLogin()">Sign In →</button>
+        </div>
+    </div>
+    <script>
+        if (localStorage.getItem('ad_token')) window.location.href = '/';
+
+        document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+        async function doLogin() {
+            const err = document.getElementById('errorMsg');
+            err.style.display = 'none';
+            const form = new URLSearchParams();
+            form.append('username', document.getElementById('username').value);
+            form.append('password', document.getElementById('password').value);
+            try {
+                const res = await fetch('/api/auth/login', { method: 'POST', body: form });
+                if (!res.ok) { const e = await res.json(); err.textContent = e.detail || 'Login failed.'; err.style.display = 'block'; return; }
+                const data = await res.json();
+                localStorage.setItem('ad_token', data.access_token);
+                window.location.href = '/';
+            } catch (e) { err.textContent = 'Server unreachable.'; err.style.display = 'block'; }
+        }
+    </script>
+</body>
+
+</html>

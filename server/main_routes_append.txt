@@ -1,0 +1,15 @@
+@app.get("/users", response_class=HTMLResponse)
+async def users_page(request: Request):
+    return templates.TemplateResponse("users.html", {"request": request})
+
+@app.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request):
+    return templates.TemplateResponse("reports.html", {"request": request})
+
+@app.get("/modules/pam/vaulting", response_class=HTMLResponse)
+async def vaulting_page(request: Request):
+    return templates.TemplateResponse("pam_vaulting.html", {"request": request})
+
+@app.get("/modules/iam/sso", response_class=HTMLResponse)
+async def sso_page(request: Request):
+    return templates.TemplateResponse("iam_sso.html", {"request": request})

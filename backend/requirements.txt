@@ -1,0 +1,23 @@
+# AssureDen Backend — Python Dependencies
+
+# ── Web framework ──────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart
+
+# ── Database ───────────────────────────────────────────────────
+sqlalchemy>=2.0.30
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+
+# ── Async / Task Queue ─────────────────────────────────────────
+celery>=5.3.6
+redis>=5.0.4
+
+# ── Auth / Security ────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.1.2
+pydantic-settings>=2.2.0
+
+# ── Utilities ──────────────────────────────────────────────────
+pydantic[email]>=2.6.0

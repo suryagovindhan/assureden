@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users - ShieldQA Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--bg-panel);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: var(--bg-dark);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.78rem;
+        }
+
+        .data-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge-admin {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-tester {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-active {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-inactive {
+            background: rgba(100, 100, 100, 0.15);
+            color: #9ca3af;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        {% set active = 'admin' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="breadcrumb">System / Users & Roles</div>
+                <div class="user-profile">
+                    <span class="status online"></span>
+                    <span id="currentUserName">Loading...</span>
+                    <a href="/login" onclick="localStorage.removeItem('access_token')"
+                        style="margin-left:15px;color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">[Logout]</a>
+                </div>
+            </header>
+            <div class="content-wrapper">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                    <h2>User Management</h2>
+                    <a href="/admin" class="action-btn primary"
+                        style="width:auto;margin:0;text-decoration:none;text-align:center;">Go to Admin Center →</a>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr>
+                            <td colspan="5" style="text-align:center;padding:30px;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script>
+        const token = localStorage.getItem('access_token');
+        if (!token) window.location.href = '/login';
+        const headers = { 'Authorization': `Bearer ${token}` };
+        fetch('/auth/me', { headers }).then(r => r.json()).then(u => { document.getElementById('currentUserName').textContent = u.username; });
+
+        fetch('/api/admin/users', { headers }).then(r => r.json()).then(users => {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = users.map(u => `<tr>
+            <td style="font-weight:500;color:white;">${u.username}</td>
+            <td style="color:var(--text-secondary);">${u.email}</td>
+            <td><span class="badge-${u.role.toLowerCase()}">${u.role}</span></td>
+            <td><span class="${u.is_active ? 'badge-active' : 'badge-inactive'}">${u.is_active ? 'Active' : 'Disabled'}</span></td>
+            <td style="color:var(--text-secondary);font-size:0.85rem;">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td>
+        </tr>`).join('');
+        });
+    </script>
+</body>
+
+</html>

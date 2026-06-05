@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Center - ShieldQA Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .admin-subnav {
+            width: 210px;
+            min-width: 210px;
+            background-color: var(--bg-dark);
+            border-right: 1px solid var(--border-color);
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .admin-subnav-title {
+            padding: 0 20px 14px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+        }
+
+        .subnav-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.88rem;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            transition: all 0.15s;
+            border-right: 3px solid transparent;
+        }
+
+        .subnav-btn:hover {
+            background: rgba(59, 130, 246, 0.08);
+            color: white;
+        }
+
+        .subnav-btn.active {
+            background: rgba(59, 130, 246, 0.12);
+            color: white;
+            border-right-color: var(--accent-blue);
+        }
+
+        .admin-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .admin-content {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        /* Panel */
+        .panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-header h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .panel-desc {
+            padding: 12px 24px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 13px 24px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.88rem;
+        }
+
+        .data-table th {
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Badges */
+        .b {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .b-admin {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        .b-tester {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+
+        .b-active {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        .b-inactive {
+            background: rgba(100, 100, 100, 0.15);
+            color: #9ca3af;
+        }
+
+        .b-pam {
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+        }
+
+        .b-iam {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+        }
+
+        .b-hybrid {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        /* Buttons */
+        .btn-sm {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            margin-right: 4px;
+            transition: all 0.15s;
+        }
+
+        .btn-sm:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .btn-sm.danger:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        .add-btn {
+            width: auto;
+            margin: 0;
+            padding: 8px 16px;
+        }
+
+        /* Tabs */
+        .tab-view {
+            display: none;
+        }
+
+        .tab-view.active {
+            display: block;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 30px;
+            width: 460px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 {
+            margin-bottom: 22px;
+            font-size: 1.05rem;
+        }
+
+        .fg {
+            margin-bottom: 16px;
+        }
+
+        .fg label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .fg input,
+        .fg select,
+        .fg textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: white;
+            font-family: var(--font-main);
+            font-size: 0.88rem;
+        }
+
+        .fg input:focus,
+        .fg select:focus,
+        .fg textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .modal-error {
+            color: var(--danger);
+            font-size: 0.83rem;
+            display: none;
+            margin-top: 6px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+
+        {% set active = 'admin' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content" style="display:flex; flex-direction:column;">
+            <header class="top-header">
+                <div class="breadcrumb">⚙️ Admin Center</div>
+                <div class="user-profile">
+                    <span class="status online"></span>
+                    <span id="currentUserName">Loading...</span>
+                    <a href="/login" onclick="localStorage.removeItem('access_token')"
+                        style="margin-left:15px;color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">[Logout]</a>
+                </div>
+            </header>
+
+            <div class="admin-body">
+                <!-- Sub-Nav -->
+                <div class="admin-subnav">
+                    <div class="admin-subnav-title">Management</div>
+                    <button class="subnav-btn active" onclick="switchTab('users',this)">👥 Users</button>
+                    <button class="subnav-btn" onclick="switchTab('applications',this)">🖥️ Applications</button>
+                    <button class="subnav-btn" onclick="switchTab('modules',this)">🧩 Test Modules</button>
+                    <button class="subnav-btn" onclick="switchTab('agents',this)">🤖 Test Agents</button>
+                    <button class="subnav-btn" onclick="switchTab('system',this)">🔧 System Settings</button>
+                </div>
+
+                <!-- Content -->
+                <div class="admin-content">
+
+                    <!-- ── USERS TAB ── -->
+                    <div id="tab-users" class="tab-view active">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3>User Management</h3>
+                                <button class="action-btn primary add-btn" onclick="openModal('userModal')">+ Add
+                                    User</button>
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersBody">
+                                    <tr>
+                                        <td colspan="6"
+                                            style="text-align:center;padding:24px;color:var(--text-secondary);">Loading…
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ── APPLICATIONS TAB ── -->
+                    <div id="tab-applications" class="tab-view">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3>Application Registry</h3>
+                                <button class="action-btn primary add-btn" onclick="openModal('appModal')">+ Add
+                                    Application</button>
+                            </div>
+                            <div class="panel-desc">Register target PAM/IAM systems that test agents will connect to.
+                            </div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Vendor</th>
+                                        <th>Base URL</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="appsBody">
+                                    <tr>
+                                        <td colspan="6"
+                                            style="text-align:center;padding:24px;color:var(--text-secondary);">Loading…
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ── TEST MODULES TAB ── -->
+                    <div id="tab-modules" class="tab-view">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3>Test Module Registry</h3>
+                                <button class="action-btn primary add-btn" onclick="openModal('modModal')">+ Add
+                                    Module</button>
+                            </div>
+                            <div class="panel-desc">Define which test capabilities are available to the platform and
+                                agents.</div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Domain</th>
+                                        <th>Module Name</th>
+                                        <th>Action Key</th>
+                                        <th>Route</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modsBody">
+                                    <tr>
+                                        <td colspan="6"
+                                            style="text-align:center;padding:24px;color:var(--text-secondary);">Loading…
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ── AGENTS TAB ── -->
+                    <div id="tab-agents" class="tab-view">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3>Registered Test Agents</h3>
+                            </div>
+                            <div style="padding:48px;text-align:center;color:var(--text-secondary);">
+                                <div style="font-size:2.5rem;margin-bottom:12px;">🤖</div>
+                                <p>Agents register automatically when they connect via WebSocket.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── SYSTEM SETTINGS TAB ── -->
+                    <div id="tab-system" class="tab-view">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3>System Settings</h3>
+                            </div>
+                            <div style="padding:48px;text-align:center;color:var(--text-secondary);">
+                                <div style="font-size:2.5rem;margin-bottom:12px;">🔧</div>
+                                <p>Coming soon...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /admin-content -->
+            </div><!-- /admin-body -->
+        </main>
+    </div>
+
+    <!-- ═══ CREATE USER MODAL ═══ -->
+    <div class="modal-overlay" id="userModal">
+        <div class="modal">
+            <h3>➕ Add New User</h3>
+            <div class="fg"><label>Username</label><input id="u-username" placeholder="john_doe"></div>
+            <div class="fg"><label>Email</label><input type="email" id="u-email" placeholder="john@company.com"></div>
+            <div class="fg"><label>Password</label><input type="password" id="u-password" placeholder="••••••••"></div>
+            <div class="fg"><label>Role</label>
+                <select id="u-role">
+                    <option value="TESTER">TESTER</option>
+                    <option value="ADMIN">ADMIN</option>
+                </select>
+            </div>
+            <div class="modal-error" id="u-err"></div>
+            <div class="modal-actions">
+                <button class="action-btn secondary add-btn" onclick="closeModal('userModal')">Cancel</button>
+                <button class="action-btn primary add-btn" onclick="createUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ CREATE APPLICATION MODAL ═══ -->
+    <div class="modal-overlay" id="appModal">
+        <div class="modal">
+            <h3>➕ Add Application</h3>
+            <div class="fg"><label>Name</label><input id="a-name" placeholder="e.g. CyberArk Vault"></div>
+            <div class="fg"><label>Type</label>
+                <select id="a-type">
+                    <option value="PAM">PAM</option>
+                    <option value="IAM">IAM</option>
+                    <option value="HYBRID">Hybrid</option>
+                </select>
+            </div>
+            <div class="fg"><label>Vendor</label><input id="a-vendor" placeholder="e.g. CyberArk, Okta, SailPoint">
+            </div>
+            <div class="fg"><label>Base URL</label><input type="url" id="a-url" placeholder="https://pam.company.local">
+            </div>
+            <div class="fg"><label>Description</label><textarea id="a-desc" rows="2"
+                    placeholder="Brief description…"></textarea></div>
+            <div class="modal-error" id="a-err"></div>
+            <div class="modal-actions">
+                <button class="action-btn secondary add-btn" onclick="closeModal('appModal')">Cancel</button>
+                <button class="action-btn primary add-btn" onclick="createApp()">Add Application</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ CREATE MODULE MODAL ═══ -->
+    <div class="modal-overlay" id="modModal">
+        <div class="modal">
+            <h3>🧩 Add Test Module</h3>
+            <div class="fg"><label>Domain</label>
+                <select id="m-domain">
+                    <option value="PAM">PAM</option>
+                    <option value="IAM">IAM</option>
+                </select>
+            </div>
+            <div class="fg"><label>Module Name</label><input id="m-name" placeholder="e.g. Password Vaulting"></div>
+            <div class="fg"><label>Action Key</label><input id="m-key" placeholder="e.g. test-vaulting (unique slug)">
+            </div>
+            <div class="fg"><label>Frontend Route</label><input id="m-url" placeholder="e.g. /modules/pam/vaulting">
+            </div>
+            <div class="fg"><label>Description</label><textarea id="m-desc" rows="2"
+                    placeholder="What does this module test?"></textarea></div>
+            <div class="modal-error" id="m-err"></div>
+            <div class="modal-actions">
+                <button class="action-btn secondary add-btn" onclick="closeModal('modModal')">Cancel</button>
+                <button class="action-btn primary add-btn" onclick="createModule()">Add Module</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('access_token');
+        if (!token) window.location.href = '/login';
+        const H = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+        fetch('/auth/me', { headers: H }).then(r => r.json())
+            .then(u => { document.getElementById('currentUserName').textContent = u.username; });
+
+        // ── Tabs ──
+        function switchTab(name, el) {
+            document.querySelectorAll('.tab-view').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            el.classList.add('active');
+            if (name === 'users') loadUsers();
+            if (name === 'applications') loadApps();
+            if (name === 'modules') loadModules();
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+        function showErr(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg; el.style.display = 'block';
+        }
+
+        // ── USERS ──
+        async function loadUsers() {
+            const tbody = document.getElementById('usersBody');
+            const res = await fetch('/api/admin/users', { headers: H });
+            const users = await res.json();
+            if (!users.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary);">No users found.</td></tr>`; return; }
+            tbody.innerHTML = users.map(u => `<tr>
+        <td style="font-weight:500;color:white;">${u.username}</td>
+        <td style="color:var(--text-secondary);">${u.email}</td>
+        <td><span class="b b-${u.role.toLowerCase()}">${u.role}</span></td>
+        <td><span class="b ${u.is_active ? 'b-active' : 'b-inactive'}">${u.is_active ? 'Active' : 'Disabled'}</span></td>
+        <td style="color:var(--text-secondary);font-size:0.82rem;">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td>
+        <td>
+            <button class="btn-sm" onclick="toggleUser('${u.id}',${u.is_active})">${u.is_active ? 'Disable' : 'Enable'}</button>
+            <button class="btn-sm danger" onclick="deleteUser('${u.id}','${u.username}')">Delete</button>
+        </td></tr>`).join('');
+        }
+
+        async function createUser() {
+            document.getElementById('u-err').style.display = 'none';
+            const payload = { username: document.getElementById('u-username').value.trim(), email: document.getElementById('u-email').value.trim(), password: document.getElementById('u-password').value, role: document.getElementById('u-role').value };
+            if (!payload.username || !payload.email || !payload.password) { showErr('u-err', 'All fields required.'); return; }
+            const res = await fetch('/api/admin/users', { method: 'POST', headers: H, body: JSON.stringify(payload) });
+            if (res.ok) { closeModal('userModal'); loadUsers();['u-username', 'u-email', 'u-password'].forEach(i => document.getElementById(i).value = ''); }
+            else { const e = await res.json(); showErr('u-err', e.detail || 'Failed.'); }
+        }
+
+        async function toggleUser(id, active) {
+            await fetch(`/api/admin/users/${id}`, { method: 'PATCH', headers: H, body: JSON.stringify({ is_active: !active }) });
+            loadUsers();
+        }
+
+        async function deleteUser(id, name) {
+            if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+            await fetch(`/api/admin/users/${id}`, { method: 'DELETE', headers: H });
+            loadUsers();
+        }
+
+        // ── APPLICATIONS ──
+        async function loadApps() {
+            const tbody = document.getElementById('appsBody');
+            const res = await fetch('/api/admin/applications', { headers: H });
+            const apps = await res.json();
+            if (!apps.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary);">No applications registered yet.</td></tr>`; return; }
+            tbody.innerHTML = apps.map(a => `<tr>
+        <td style="font-weight:500;color:white;">${a.name}</td>
+        <td><span class="b b-${a.app_type.toLowerCase()}">${a.app_type}</span></td>
+        <td style="color:var(--text-secondary);">${a.vendor || '-'}</td>
+        <td style="color:var(--text-secondary);font-size:0.82rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;">${a.base_url || '-'}</td>
+        <td><span class="b ${a.is_active ? 'b-active' : 'b-inactive'}">${a.is_active ? 'Active' : 'Inactive'}</span></td>
+        <td><button class="btn-sm danger" onclick="deleteApp('${a.id}','${a.name}')">Delete</button></td>
+        </tr>`).join('');
+        }
+
+        async function createApp() {
+            document.getElementById('a-err').style.display = 'none';
+            const payload = { name: document.getElementById('a-name').value.trim(), app_type: document.getElementById('a-type').value, vendor: document.getElementById('a-vendor').value.trim() || null, base_url: document.getElementById('a-url').value.trim() || null, description: document.getElementById('a-desc').value.trim() || null };
+            if (!payload.name) { showErr('a-err', 'Name is required.'); return; }
+            const res = await fetch('/api/admin/applications', { method: 'POST', headers: H, body: JSON.stringify(payload) });
+            if (res.ok) { closeModal('appModal'); loadApps();['a-name', 'a-vendor', 'a-url', 'a-desc'].forEach(i => document.getElementById(i).value = ''); }
+            else { const e = await res.json(); showErr('a-err', e.detail || 'Failed.'); }
+        }
+
+        async function deleteApp(id, name) {
+            if (!confirm(`Remove application "${name}"?`)) return;
+            await fetch(`/api/admin/applications/${id}`, { method: 'DELETE', headers: H });
+            loadApps();
+        }
+
+        // ── TEST MODULES ──
+        async function loadModules() {
+            const tbody = document.getElementById('modsBody');
+            const res = await fetch('/api/admin/modules', { headers: H });
+            const mods = await res.json();
+            if (!mods.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary);">No modules registered. Add the built-in test modules above.</td></tr>`; return; }
+            tbody.innerHTML = mods.map(m => `<tr>
+        <td><span class="b b-${m.domain.toLowerCase()}">${m.domain}</span></td>
+        <td style="font-weight:500;color:white;">${m.name}</td>
+        <td style="font-family:monospace;font-size:0.82rem;color:var(--text-secondary);">${m.action_key}</td>
+        <td style="color:var(--text-secondary);font-size:0.82rem;">${m.url_path || '-'}</td>
+        <td><span class="b ${m.is_active ? 'b-active' : 'b-inactive'}">${m.is_active ? 'Active' : 'Inactive'}</span></td>
+        <td>
+            <button class="btn-sm" onclick="toggleModule('${m.id}',${m.is_active})">${m.is_active ? 'Disable' : 'Enable'}</button>
+            <button class="btn-sm danger" onclick="deleteModule('${m.id}','${m.name}')">Delete</button>
+        </td></tr>`).join('');
+        }
+
+        async function createModule() {
+            document.getElementById('m-err').style.display = 'none';
+            const payload = { domain: document.getElementById('m-domain').value, name: document.getElementById('m-name').value.trim(), action_key: document.getElementById('m-key').value.trim(), url_path: document.getElementById('m-url').value.trim() || null, description: document.getElementById('m-desc').value.trim() || null };
+            if (!payload.name || !payload.action_key) { showErr('m-err', 'Name and Action Key are required.'); return; }
+            const res = await fetch('/api/admin/modules', { method: 'POST', headers: H, body: JSON.stringify(payload) });
+            if (res.ok) { closeModal('modModal'); loadModules();['m-name', 'm-key', 'm-url', 'm-desc'].forEach(i => document.getElementById(i).value = ''); }
+            else { const e = await res.json(); showErr('m-err', e.detail || 'Failed.'); }
+        }
+
+        async function toggleModule(id, active) {
+            await fetch(`/api/admin/modules/${id}`, { method: 'PATCH', headers: H, body: JSON.stringify({ is_active: !active }) });
+            loadModules();
+        }
+
+        async function deleteModule(id, name) {
+            if (!confirm(`Delete module "${name}"?`)) return;
+            await fetch(`/api/admin/modules/${id}`, { method: 'DELETE', headers: H });
+            loadModules();
+        }
+
+        window.onload = loadUsers;
+    </script>
+</body>
+
+</html>

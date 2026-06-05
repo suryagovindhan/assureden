@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports — AssureDen</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+
+<body>
+    <div class="app-shell">
+        {% set active = 'reports' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="breadcrumb"><strong>Reports & Audits</strong></div>
+                <div class="user-info">
+                    <span class="status-dot"></span>
+                    <span id="userName">Loading…</span>
+                    <a class="logout-link" onclick="logout()">Logout</a>
+                </div>
+            </div>
+            <div class="page-body">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>Execution History</h3>
+                        <div style="display:flex;gap:10px;">
+                            <select class="form-control" style="width:140px;" id="statusFilter"
+                                onchange="loadReports()">
+                                <option value="">All Status</option>
+                                <option>SUCCESS</option>
+                                <option>FAILED</option>
+                                <option>ERROR</option>
+                                <option>RUNNING</option>
+                            </select>
+                            <input class="form-control" style="width:190px;" placeholder="Search…"
+                                oninput="filterTable(this.value)">
+                        </div>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Module</th>
+                                <th>Action</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-reports"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const T = localStorage.getItem('ad_token');
+        if (!T) window.location.href = '/login';
+        const H = { 'Authorization': `Bearer ${T}` };
+        function logout() { localStorage.removeItem('ad_token'); window.location.href = '/login'; }
+        fetch('/api/auth/me', { headers: H }).then(r => r.json()).then(u => { document.getElementById('userName').textContent = u.username; });
+
+        async function loadReports() {
+            const res = await fetch('/api/reports/', { headers: H });
+            const rows = await res.json();
+            const sf = document.getElementById('statusFilter').value;
+            const data = sf ? rows.filter(r => r.status === sf) : rows;
+            const tbody = document.getElementById('tbody-reports');
+            if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-secondary);">No records found.</td></tr>`; return; }
+            tbody.innerHTML = data.map(r => {
+                const cls = r.status === 'SUCCESS' ? 'success' : r.status === 'FAILED' ? 'failed' : 'error';
+                return `<tr>
+                <td style="font-family:monospace;color:var(--text-secondary);font-size:0.78rem;">${r.id.substring(0, 8)}…</td>
+                <td>${r.test_module}</td><td>${r.action}</td>
+                <td><span class="badge badge-${cls.toLowerCase()}">${r.status}</span></td>
+                <td style="color:var(--text-secondary);">${r.execution_time_ms ? r.execution_time_ms + 'ms' : '-'}</td>
+                <td style="color:var(--text-secondary);font-size:0.8rem;">${r.created_at ? new Date(r.created_at).toLocaleString() : '-'}</td>
+            </tr>`;
+            }).join('');
+        }
+        window.onload = loadReports;
+    </script>
+</body>
+
+</html>

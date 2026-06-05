@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ShieldQA Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+
+        {% set active = 'dashboard' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="breadcrumb">Dashboard / Overview</div>
+                <div class="user-profile">
+                    <span class="status online"></span>
+                    <span id="current-user-name">Loading...</span>
+                    <a href="/login" onclick="localStorage.removeItem('access_token')"
+                        style="margin-left:15px;color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">[Logout]</a>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>Total Tests Executed</h3>
+                        <div class="value" id="metric-total-tests">--</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Pass Rate</h3>
+                        <div class="value success" id="metric-pass-rate">--%</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Active Agents</h3>
+                        <div class="value">
+                            <span id="metric-online-agents">--</span>
+                            <span class="sub-text">/ <span id="metric-total-agents">--</span> Total</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="split-layout">
+                    <div class="logs-panel">
+                        <h3>Live Agent Terminal</h3>
+                        <div class="terminal-container" id="terminal">
+                            <div class="log-line sys">System initialized. Awaiting agent connection...</div>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <h3>Trigger Operations</h3>
+                        <button class="action-btn primary" onclick="triggerTest('pam', 'test-vaulting')">Trigger PAM
+                            Vaulting Test</button>
+                        <button class="action-btn secondary" onclick="triggerTest('iam', 'test-sso')">Trigger IAM SSO
+                            Test</button>
+                        <button class="action-btn secondary" onclick="window.location.href='/admin'"
+                            style="margin-top:16px;">Open Admin Center ⚙️</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

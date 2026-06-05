@@ -1,0 +1,24 @@
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <div class="logo">A</div>
+        <h2>AssureDen</h2>
+        <span class="env-tag">Enterprise</span>
+    </div>
+    <nav>
+        <div class="nav-section">Workspace</div>
+        <a href="/" class="nav-item {% if active == 'home' %}active{% endif %}">
+            <span class="icon">🏠</span> Dashboard
+        </a>
+        <a href="/reports" class="nav-item {% if active == 'reports' %}active{% endif %}">
+            <span class="icon">📋</span> Reports &amp; Audits
+        </a>
+        <div class="nav-section">Testing</div>
+        <a href="/sandbox" class="nav-item {% if active == 'sandbox' %}active{% endif %}">
+            <span class="icon">🧪</span> Test Recorder
+        </a>
+        <div class="nav-section">Administration</div>
+        <a href="/admin" class="nav-item {% if active == 'admin' %}active{% endif %}">
+            <span class="icon">⚙️</span> Admin Center
+        </a>
+    </nav>
+</aside>

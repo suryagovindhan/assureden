@@ -1,0 +1,41 @@
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <h2>ShieldQA</h2>
+        <span class="badge">Enterprise</span>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+            <span class="icon">📊</span> Dashboard
+        </a>
+
+        <div class="nav-section">PAM Modules</div>
+        <a href="/modules/pam/vaulting" class="nav-item {% if active == 'pam-vaulting' %}active{% endif %}">
+            <span class="icon">🔐</span> Vaulting
+        </a>
+        <a href="/modules/pam/checkout" class="nav-item {% if active == 'pam-checkout' %}active{% endif %}">
+            <span class="icon">🎟️</span> Credential Checkout
+        </a>
+        <a href="/modules/pam/session" class="nav-item {% if active == 'pam-session' %}active{% endif %}">
+            <span class="icon">🎥</span> Session Recording
+        </a>
+
+        <div class="nav-section">IAM Modules</div>
+        <a href="/modules/iam/provisioning" class="nav-item {% if active == 'iam-provisioning' %}active{% endif %}">
+            <span class="icon">👤</span> Provisioning
+        </a>
+        <a href="/modules/iam/sso" class="nav-item {% if active == 'iam-sso' %}active{% endif %}">
+            <span class="icon">🔑</span> Single Sign-On
+        </a>
+        <a href="/modules/iam/mfa" class="nav-item {% if active == 'iam-mfa' %}active{% endif %}">
+            <span class="icon">📱</span> MFA Flows
+        </a>
+
+        <div class="nav-section">System</div>
+        <a href="/reports" class="nav-item {% if active == 'reports' %}active{% endif %}">
+            <span class="icon">📋</span> Reports & Audits
+        </a>
+        <a href="/admin" class="nav-item {% if active == 'admin' %}active{% endif %}">
+            <span class="icon">⚙️</span> Admin Center
+        </a>
+    </nav>
+</aside>

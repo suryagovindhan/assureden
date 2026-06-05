@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports & Audits - ShieldQA Enterprise</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--bg-panel);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: var(--bg-dark);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.78rem;
+        }
+
+        .data-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+        }
+
+        .status-failed {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        .status-error {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .filter-bar input,
+        .filter-bar select {
+            padding: 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 6px;
+            font-family: var(--font-main);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        {% set active = 'reports' %}
+        {% include '_sidebar.html' %}
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="breadcrumb">System / Reports & Audits</div>
+                <div class="user-profile">
+                    <span class="status online"></span>
+                    <span id="currentUserName">Loading...</span>
+                    <a href="/login" onclick="localStorage.removeItem('access_token')"
+                        style="margin-left:15px;color:var(--text-secondary);text-decoration:none;font-size:0.8rem;">[Logout]</a>
+                </div>
+            </header>
+            <div class="content-wrapper">
+                <div style="margin-bottom:24px;">
+                    <h2>Audit Logs & Test Reports</h2>
+                </div>
+                <div class="filter-bar">
+                    <input type="text" placeholder="Search logs..." style="flex:1;" oninput="filterTable(this.value)">
+                    <select id="moduleFilter" onchange="loadReports()">
+                        <option value="all">All Modules</option>
+                        <option value="PAM">PAM</option>
+                        <option value="IAM">IAM</option>
+                    </select>
+                    <select id="statusFilter" onchange="loadReports()">
+                        <option value="all">All Status</option>
+                        <option value="SUCCESS">Success</option>
+                        <option value="FAILED">Failed</option>
+                        <option value="ERROR">Error</option>
+                    </select>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Module</th>
+                            <th>Action</th>
+                            <th>Status</th>
+                            <th>Duration</th>
+                            <th>Date/Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align:center;padding:30px;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script>
+        const token = localStorage.getItem('access_token');
+        if (!token) window.location.href = '/login';
+        const headers = { 'Authorization': `Bearer ${token}` };
+
+        fetch('/auth/me', { headers }).then(r => r.json()).then(u => { document.getElementById('currentUserName').textContent = u.username; });
+
+        async function loadReports() {
+            const tbody = document.getElementById('reportsTableBody');
+            const res = await fetch('/api/reports/', { headers });
+            const reports = await res.json();
+            if (!reports.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-secondary);">No historical test executions found.</td></tr>';
+                return;
+            }
+            const moduleF = document.getElementById('moduleFilter').value;
+            const statusF = document.getElementById('statusFilter').value;
+            const filtered = reports.filter(r =>
+                (moduleF === 'all' || r.test_module === moduleF) &&
+                (statusF === 'all' || r.status === statusF)
+            );
+            tbody.innerHTML = filtered.map(r => {
+                let cls = 'status-error';
+                if (r.status === 'SUCCESS') cls = 'status-success';
+                if (r.status === 'FAILED') cls = 'status-failed';
+                return `<tr>
+                <td style="font-family:monospace;color:var(--text-secondary);font-size:0.85rem;">${String(r.id).substring(0, 8)}…</td>
+                <td style="font-weight:500;">${r.test_module}</td>
+                <td>${r.action}</td>
+                <td><span class="status-badge ${cls}">${r.status}</span></td>
+                <td style="color:var(--text-secondary);">${r.execution_time_ms ? r.execution_time_ms + 'ms' : '-'}</td>
+                <td style="color:var(--text-secondary);font-size:0.85rem;">${new Date(r.created_at).toLocaleString()}</td>
+            </tr>`;
+            }).join('');
+        }
+        window.onload = loadReports;
+    </script>
+</body>
+
+</html>
