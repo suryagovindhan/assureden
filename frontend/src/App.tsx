@@ -10,6 +10,11 @@ import DashboardShell from "./pages/DashboardShell";
 import DashboardHome  from "./pages/DashboardHome";
 import UsersPage      from "./pages/admin/UsersPage";
 import AgentsPage     from "./pages/admin/AgentsPage";
+import ObjectExplorer    from "./pages/objects/ObjectExplorer";
+import KeywordSearch     from "./pages/objects/KeywordSearch";
+import TestSuiteBrowser  from "./pages/test_cases/TestSuiteBrowser";
+import AllCasesPage      from "./pages/test_cases/AllCasesPage";
+import TestCaseEditor    from "./pages/test_cases/TestCaseEditor";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +62,11 @@ export default function App() {
               <Route element={<ProtectedRoute />}>
                 <Route element={<DashboardShell />}>
                   <Route path="/dashboard" element={<DashboardHome />} />
+                  <Route path="/objects"        element={<ObjectExplorer />} />
+                  <Route path="/objects/search" element={<KeywordSearch />} />
+                  <Route path="/test-cases"          element={<TestSuiteBrowser />} />
+                  <Route path="/test-cases/all"      element={<AllCasesPage />} />
+                  <Route path="/test-cases/:case_id" element={<TestCaseEditor />} />
                   <Route path="/admin/users"   element={<UsersPage />} />
                   <Route path="/admin/agents"  element={<AgentsPage />} />
                 </Route>

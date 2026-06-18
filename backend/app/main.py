@@ -13,6 +13,8 @@ from app.api.auth.router import router as auth_router
 from app.api.organizations.router import router as org_router
 from app.api.users.router import router as user_router
 from app.api.agents.router import router as agent_router
+from app.api.object_repository.router import router as object_repo_router
+from app.api.test_cases.router import router as test_cases_router
 
 
 @asynccontextmanager
@@ -66,7 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(auth_router,  prefix="/api")
     app.include_router(org_router,   prefix="/api")
     app.include_router(user_router,  prefix="/api")
-    app.include_router(agent_router, prefix="/api")
+    app.include_router(agent_router,       prefix="/api")
+    app.include_router(object_repo_router,  prefix="/api")
+    app.include_router(test_cases_router,    prefix="/api")
 
     @app.get("/api/health")
     def health():
