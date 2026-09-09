@@ -65,14 +65,67 @@ class Settings(BaseSettings):
     AGENT_API_KEY_HEADER: str = "X-Agent-Api-Key"
 
     # ── Storage ───────────────────────────────────────────────────
-    ARTIFACT_STORAGE_PROVIDER: str = "local"        # local | s3 | azure_blob
-    ARTIFACT_LOCAL_BASE_PATH: str = "artifacts"
+    ARTIFACT_STORAGE_PROVIDER: str = "local"        # local | s3 | gcs | azure
+    # Path resolved via Path(...).resolve() so both relative and absolute work.
+    # Dev default: .artifacts/ inside the backend directory.
+    # Production: override with ARTIFACT_LOCAL_BASE_PATH=/var/lib/assureden/artifacts
+    ARTIFACT_LOCAL_BASE_PATH: str = ".artifacts"
+
+    # ── Realtime / SSE ────────────────────────────────────────────
+    # Short-lived ticket for SSE connections (JWT Bearer tokens can't be sent
+    # via the browser's native EventSource API).
+    SSE_TICKET_EXPIRE_SECONDS: int = 60
 
     # ── Execution Defaults ────────────────────────────────────────
     DEFAULT_EXECUTION_TIMEOUT_SECONDS: int = 3600
     DEFAULT_STARTUP_TIMEOUT_SECONDS: int = 30
     WATCHDOG_INTERVAL_SECONDS: int = 30
     DEPENDENCY_REBUILD_ASYNC_THRESHOLD: int = 10_000
+
+    # ── Phase 3: Variable Encryption ──────────────────────────────
+    # JSON map of key_id → base64-encoded Fernet key.
+    # Generate with: from cryptography.fernet import Fernet; Fernet.generate_key()
+    # Example: '{"v1": "base64key..."}'
+    # The LAST key in insertion order is the active key for new writes.
+    VARIABLE_ENCRYPTION_KEYS: str = "{}"          # JSON string; override in .env
+    VARIABLE_ENCRYPTION_ACTIVE_KEY_ID: str = "v1" # Key ID used for new encryptions
+
+    # ── Phase 3: Agent Protocol ───────────────────────────────────
+    MINIMUM_SUPPORTED_AGENT_PROTOCOL: int = 1
+    MAXIMUM_SUPPORTED_AGENT_PROTOCOL: int = 4
+    AGENT_LEASE_DURATION_SECONDS: int = 300        # 5 minutes
+
+    # ── Phase 3: Agent Heartbeat Status Thresholds ────────────────
+    AGENT_STALE_SECONDS: int = 30
+    AGENT_OFFLINE_SECONDS: int = 90
+
+    # ── Phase 3: Execution Snapshot Limits ───────────────────────
+    MAX_EXPANDED_STEPS: int = 1000
+    MAX_SNAPSHOT_BYTES: int = 5 * 1024 * 1024     # 5 MB
+
+    # ── Phase 3: Variable Resolution ─────────────────────────────
+    VARIABLE_MAX_RECURSION_DEPTH: int = 20
+    RUN_EVENT_MAX_METADATA_BYTES: int = 16 * 1024  # 16 KB
+
+    # ── Phase 4: Orchestration ────────────────────────────────────
+    # Watchdog: how many times an agent can fail to pick up a run before TIMED_OUT
+    MAX_DISPATCH_ATTEMPTS: int = 3
+    # Preferred agent: after this many seconds offline, release run to pool
+    PREFERRED_AGENT_WAIT_SECONDS: int = 300
+    # Agent offline detection threshold (seconds without heartbeat → OFFLINE)
+    AGENT_OFFLINE_THRESHOLD_SECONDS: int = 120
+    # Scheduler: minimum cron interval in seconds (prevent queue floods)
+    CRON_MIN_INTERVAL_SECONDS: int = 60
+    # Dashboard metrics: cache TTL in seconds
+    DASHBOARD_METRICS_CACHE_TTL_SECONDS: int = 20
+    # Testing: when True, Celery tasks run synchronously (no broker required)
+    TESTING: bool = False
+
+    # ── Phase 8: Reports ──────────────────────────────────────────────
+    # Hard upper bound for any report time range (protects expensive aggregations)
+    REPORT_MAX_RANGE_DAYS: int = 90
+    # Minimum eligible terminal runs for a test case to appear in the flakiness report
+    FLAKINESS_MIN_ELIGIBLE_RUNS: int = 3
 
 
 @lru_cache

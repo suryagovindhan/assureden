@@ -21,6 +21,12 @@ import {
   Assignment as CaseIcon,
   PlaylistAddCheck as AllCasesIcon,
   AccountTree as SuiteIcon,
+  TuneRounded as EnvIcon,
+  AccountTreeOutlined as FlowIcon,
+  PlayCircleOutlined as RunIcon,
+  Schedule as ScheduleIcon,
+  ViewList as QueueIcon,
+  BarChart as ReportsIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -46,6 +52,26 @@ const NAV_GROUPS = [
       { label: "Suites",     path: "/test-cases",     icon: <SuiteIcon />,    minRole: 0 },
       { label: "All Cases",  path: "/test-cases/all", icon: <AllCasesIcon />, minRole: 0 },
       { label: "My Cases",   path: "/test-cases/all?owner=me", icon: <CaseIcon />, minRole: 0 },
+    ],
+  },
+  {
+    label: "Environments & Flows",
+    items: [
+      { label: "Environments", path: "/environments", icon: <EnvIcon />,  minRole: 0 },
+      { label: "Flows",        path: "/flows",         icon: <FlowIcon />, minRole: 0 },
+    ],
+  },
+  {
+    label: "Execution",
+    items: [
+      { label: "Test Runs",  path: "/runs",      icon: <RunIcon />,      minRole: 0 },
+      { label: "Schedules", path: "/schedules", icon: <ScheduleIcon />, minRole: 0 },
+    ],
+  },
+  {
+    label: "Analytics",
+    items: [
+      { label: "Reports", path: "/reports", icon: <ReportsIcon />, minRole: 0 },
     ],
   },
   {

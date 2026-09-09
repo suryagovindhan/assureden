@@ -15,6 +15,12 @@ import KeywordSearch     from "./pages/objects/KeywordSearch";
 import TestSuiteBrowser  from "./pages/test_cases/TestSuiteBrowser";
 import AllCasesPage      from "./pages/test_cases/AllCasesPage";
 import TestCaseEditor    from "./pages/test_cases/TestCaseEditor";
+import EnvironmentsPage  from "./pages/environments/EnvironmentsPage";
+import FlowsPage         from "./pages/flows/FlowsPage";
+import RunsPage          from "./pages/runs/RunsPage";
+import RunDetailPage     from "./pages/runs/RunDetailPage";
+import SchedulesPage     from "./pages/schedules/SchedulesPage";
+import ReportsPage       from "./pages/reports/ReportsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,6 +73,12 @@ export default function App() {
                   <Route path="/test-cases"          element={<TestSuiteBrowser />} />
                   <Route path="/test-cases/all"      element={<AllCasesPage />} />
                   <Route path="/test-cases/:case_id" element={<TestCaseEditor />} />
+                  <Route path="/environments"        element={<EnvironmentsPage />} />
+                  <Route path="/flows"               element={<FlowsPage />} />
+                  <Route path="/runs"                element={<RunsPage />} />
+                  <Route path="/runs/:run_id"        element={<RunDetailPage />} />
+                  <Route path="/schedules"           element={<SchedulesPage />} />
+                  <Route path="/reports"             element={<ReportsPage />} />
                   <Route path="/admin/users"   element={<UsersPage />} />
                   <Route path="/admin/agents"  element={<AgentsPage />} />
                 </Route>

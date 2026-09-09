@@ -46,8 +46,10 @@ export default function UsersPage() {
       setFormError("");
     },
     onError: (e: unknown) => {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setFormError(err.response?.data?.detail ?? "Failed to create user");
+      const err = e as { response?: { data?: { detail?: string | any[] } } };
+      const detail = err.response?.data?.detail;
+      const errMsg = Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join(", ") : (detail || "Failed to create user");
+      setFormError(errMsg);
     },
   });
 

@@ -60,6 +60,7 @@ class StepAction(str, enum.Enum):
     DRAG_DROP      = "DRAG_DROP"
     UPLOAD_FILE    = "UPLOAD_FILE"
     PRESS_KEY      = "PRESS_KEY"
+    FLOW           = "FLOW"      # Phase 3: embed a reusable flow (expansion at dispatch)
 
 
 class AssertionType(str, enum.Enum):
@@ -284,6 +285,16 @@ class TestStep(Base):
     input_value:  Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
     target_url:   Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     description:  Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
+
+    # ── Phase 3: Reusable Flow embedding ─────────────────────────
+    # When action = "FLOW", flow_id + flow_version identify the referenced flow version.
+    # flow_version is pinned at step-create time and stored in the execution snapshot.
+    flow_id:      Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("flows.id", use_alter=True, ondelete="RESTRICT", name="fk_test_step_flow"),
+        nullable=True,
+    )
+    flow_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     is_optional:           Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_enabled:            Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

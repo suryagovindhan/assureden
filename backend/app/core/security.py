@@ -75,3 +75,51 @@ def decode_refresh_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def create_sse_ticket(
+    user_id: UUID,
+    org_id: UUID,
+    *,
+    run_id: Optional[str] = None,
+) -> str:
+    """
+    Create a short-lived (SSE_TICKET_EXPIRE_SECONDS) single-purpose token.
+
+    Properties:
+    - type = "sse"  → rejected by decode_access_token / decode_refresh_token
+    - Optionally scoped to a single run_id to prevent ticket reuse across runs
+    - Intended for use as ?token=<ticket> on GET /sse/runs/{id}
+    """
+    expire = datetime.now(timezone.utc) + timedelta(
+        seconds=settings.SSE_TICKET_EXPIRE_SECONDS
+    )
+    payload: dict = {
+        "sub":    str(user_id),
+        "org_id": str(org_id),
+        "type":   "sse",
+        "exp":    expire,
+    }
+    if run_id:
+        payload["run_id"] = str(run_id)
+    return _encode(payload)
+
+
+def decode_sse_ticket(token: str, *, run_id: Optional[str] = None) -> Optional[dict]:
+    """
+    Validate an SSE ticket. Returns the payload or None.
+
+    If `run_id` is provided, also validates the ticket is scoped to that run
+    (when the ticket was issued with a run_id scope).
+    """
+    try:
+        payload = _decode(token)
+        if payload.get("type") != "sse":
+            return None
+        # Validate run_id scope if the ticket was scoped
+        ticket_run_id = payload.get("run_id")
+        if ticket_run_id and run_id and ticket_run_id != str(run_id):
+            return None
+        return payload
+    except JWTError:
+        return None

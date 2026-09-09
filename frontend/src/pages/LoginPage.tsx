@@ -30,8 +30,10 @@ export default function LoginPage() {
       await login(email, password, orgSlug);
       navigate("/dashboard");
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
-      setError(axiosErr.response?.data?.detail ?? "Login failed. Check credentials.");
+      const axiosErr = err as { response?: { data?: { detail?: string | any[] } } };
+      const detail = axiosErr.response?.data?.detail;
+      const errMsg = Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join(", ") : (detail || "Login failed. Check credentials.");
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

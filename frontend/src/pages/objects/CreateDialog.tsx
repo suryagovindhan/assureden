@@ -212,10 +212,11 @@ export default function CreateDialog({ type, parentId, parentName, onClose, onCr
           {/* Error */}
           {mutation.isError && (
             <Box sx={{ fontSize: 12, color: "#ef4444", mt: 0.5 }}>
-              {String(
-                (mutation.error as any)?.response?.data?.detail ||
-                "Failed to create. Check if the name already exists."
-              )}
+              {(() => {
+                const detail = (mutation.error as any)?.response?.data?.detail;
+                if (Array.isArray(detail)) return detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+                return detail || "Failed to create. Check if the name already exists.";
+              })()}
             </Box>
           )}
         </Box>

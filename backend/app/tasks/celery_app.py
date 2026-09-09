@@ -1,5 +1,9 @@
 """
 tasks/celery_app.py — Celery application instance
+
+Phase 4 additions:
+  - Beat schedule: lease watchdog, job scheduler, offline detector
+  - TESTING mode: task_always_eager=True (no broker required in tests)
 """
 
 from celery import Celery
@@ -11,7 +15,12 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
         "app.tasks.health",
-        # Phase 6+: app.tasks.execution, app.tasks.locator_health, app.tasks.watchdog
+        # Phase 4
+        "app.tasks.watchdog",
+        "app.tasks.auto_retry",
+        "app.tasks.scheduler",
+        "app.tasks.agent_offline_detector",
+        # Phase 6+: app.tasks.webhooks, app.tasks.notifications
     ],
 )
 
@@ -24,3 +33,26 @@ celery_app.conf.update(
     task_track_started=True,
     worker_prefetch_multiplier=1,    # fair dispatch — one task at a time per worker
 )
+
+# ── Celery Beat schedule ──────────────────────────────────────────────────────
+celery_app.conf.beat_schedule = {
+    "reap-expired-leases": {
+        "task": "app.tasks.watchdog.reap_expired_leases",
+        "schedule": settings.WATCHDOG_INTERVAL_SECONDS,  # default 30s
+    },
+    "fire-scheduled-jobs": {
+        "task": "app.tasks.scheduler.fire_scheduled_jobs",
+        "schedule": 60.0,
+    },
+    "detect-offline-agents": {
+        "task": "app.tasks.agent_offline_detector.detect_offline_agents",
+        "schedule": 60.0,
+    },
+}
+
+# ── Test mode: run tasks synchronously without a broker ───────────────────────
+if settings.TESTING:
+    celery_app.conf.update(
+        task_always_eager=True,
+        task_eager_propagates=True,  # re-raise exceptions in tests
+    )
