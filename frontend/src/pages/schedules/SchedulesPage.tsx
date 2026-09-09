@@ -118,7 +118,7 @@ function ScheduleFormDialog({ open, onClose, initial, testCases }: ScheduleFormP
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { bgcolor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)" } }}>
+      slotProps={{ paper: { sx: { bgcolor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)" } } }}>
       <DialogTitle sx={{ color: "#fff", fontWeight: 700 }}>
         {isEdit ? "Edit Schedule" : "New Schedule"}
       </DialogTitle>
@@ -126,27 +126,27 @@ function ScheduleFormDialog({ open, onClose, initial, testCases }: ScheduleFormP
         {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
 
         <TextField label="Name" value={form.name} onChange={f("name")}
-          fullWidth size="small" InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-          InputProps={{ sx: { color: "#fff" } }} />
+          fullWidth size="small" slotProps={{ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } }, input: { sx: { color: "#fff" } } }}
+           />
 
         <Stack direction="row" spacing={2}>
           <TextField label="Cron Expression" value={form.cron_expression}
             onChange={f("cron_expression")} fullWidth size="small"
             helperText="5-field cron: min hour day month weekday"
-            InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-            InputProps={{ sx: { color: "#fff", fontFamily: "monospace" } }} />
+            slotProps={{ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } }, input: { sx: { color: "#fff", fontFamily: "monospace" } } }}
+             />
           <TextField select label="Timezone" value={form.timezone}
             onChange={f("timezone")} sx={{ minWidth: 160 }} size="small"
-            InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-            SelectProps={{ MenuProps: { PaperProps: { sx: { bgcolor: "#1a1a2e" } } } }}>
+            slotProps={{ select: { MenuProps: { slotProps: { paper: { sx: { bgcolor: "#1a1a2e" } } } } }, ...({ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } } }) }}
+            >
             {TIMEZONES.map((tz) => <MenuItem key={tz} value={tz} sx={{ color: "#fff" }}>{tz}</MenuItem>)}
           </TextField>
         </Stack>
 
         <TextField select label="Test Case" value={form.test_case_id}
           onChange={f("test_case_id")} fullWidth size="small"
-          InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-          SelectProps={{ MenuProps: { PaperProps: { sx: { bgcolor: "#1a1a2e" } } } }}>
+          slotProps={{ select: { MenuProps: { slotProps: { paper: { sx: { bgcolor: "#1a1a2e" } } } } }, ...({ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } } }) }}
+          >
           {testCases.map((tc) => (
             <MenuItem key={tc.id} value={tc.id} sx={{ color: "#fff" }}>{tc.name}</MenuItem>
           ))}
@@ -155,20 +155,20 @@ function ScheduleFormDialog({ open, onClose, initial, testCases }: ScheduleFormP
         <Stack direction="row" spacing={2}>
           <TextField select label="Priority" value={form.priority}
             onChange={f("priority")} sx={{ minWidth: 130 }} size="small"
-            InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-            SelectProps={{ MenuProps: { PaperProps: { sx: { bgcolor: "#1a1a2e" } } } }}>
+            slotProps={{ select: { MenuProps: { slotProps: { paper: { sx: { bgcolor: "#1a1a2e" } } } } }, ...({ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } } }) }}
+            >
             {["URGENT", "HIGH", "NORMAL", "LOW"].map((p) => (
               <MenuItem key={p} value={p} sx={{ color: "#fff" }}>{p}</MenuItem>
             ))}
           </TextField>
           <TextField label="Max Retries" value={form.max_retries}
             onChange={f("max_retries")} type="number" sx={{ maxWidth: 120 }} size="small"
-            InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-            InputProps={{ sx: { color: "#fff" } }} />
+            slotProps={{ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } }, input: { sx: { color: "#fff" } } }}
+             />
           <TextField label="Miss Threshold (min)" value={form.miss_threshold_minutes}
             onChange={f("miss_threshold_minutes")} type="number" size="small"
-            InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-            InputProps={{ sx: { color: "#fff" } }} />
+            slotProps={{ inputLabel: { sx: { color: "rgba(255,255,255,0.5)" } }, input: { sx: { color: "#fff" } } }}
+             />
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -193,7 +193,7 @@ function DeleteDialog({ job, onClose }: { job: ScheduledJob | null; onClose: () 
   });
   return (
     <Dialog open={Boolean(job)} onClose={onClose}
-      PaperProps={{ sx: { bgcolor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)" } }}>
+      slotProps={{ paper: { sx: { bgcolor: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)" } } }}>
       <DialogTitle sx={{ color: "#fff" }}>Delete schedule?</DialogTitle>
       <DialogContent>
         <Typography sx={{ color: "rgba(255,255,255,0.7)" }}>
@@ -233,8 +233,8 @@ function HistoryPanel({ jobId }: { jobId: string }) {
       {rows.map((h) => {
         const Icon = h.status === "TRIGGERED" ? OkIcon : h.status === "SKIPPED" ? SkipIcon : ErrorIcon;
         return (
-          <Stack key={h.id} direction="row" alignItems="center" spacing={1.5}
-            sx={{ py: 0.75, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <Stack key={h.id} direction="row"  spacing={1.5}
+            sx={{ alignItems: "center", ...({ py: 0.75, borderBottom: "1px solid rgba(255,255,255,0.05)" }) }}>
             <Icon sx={{ fontSize: 16, color: STATUS_COLORS[h.status] ?? "#aaa" }} />
             <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.6)", minWidth: 140 }}>
               {fmtDate(h.triggered_at)}
@@ -301,8 +301,8 @@ export default function SchedulesPage() {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 3 }}  >
+        <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
           <Box sx={{
             width: 40, height: 40, borderRadius: 2,
             background: "linear-gradient(135deg, #667eea, #764ba2)",
@@ -359,7 +359,7 @@ export default function SchedulesPage() {
                 "&:hover": { borderColor: "rgba(102,126,234,0.3)" },
               }}>
                 {/* Main row */}
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ p: 2 }}>
+                <Stack direction="row"  spacing={2} sx={{ alignItems: "center", ...({ p: 2 }) }}>
                   {/* Enable toggle */}
                   <Tooltip title={job.is_enabled ? "Disable" : "Enable"}>
                     <Switch
@@ -379,7 +379,7 @@ export default function SchedulesPage() {
                     <Typography sx={{ fontWeight: 600, color: "#fff", fontSize: 14 }}>
                       {job.name}
                     </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center" mt={0.25}>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center", mt: 0.25 }} >
                       <Typography sx={{
                         fontFamily: "monospace", fontSize: 12,
                         color: "#667eea", bgcolor: "rgba(102,126,234,0.1)",

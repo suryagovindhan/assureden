@@ -24,3 +24,5 @@ pydantic[email]>=2.6.0
 
 # ── Cryptography (Phase 3 — Fernet secret encryption) ─────────
 cryptography>=42.0.0
+croniter>=6.0.0
+tzdata>=2026.1

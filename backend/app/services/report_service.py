@@ -199,7 +199,7 @@ class ReportService:
         Granularity is adaptive (used for the trend line only).
         """
         granularity = cls.resolve_granularity(since, until)
-        trunc_fn = _trunc_fn(granularity)
+        trunc_fn = _trunc_fn(granularity, _dialect(db))
 
         # Status breakdown
         status_rows = db.execute(text("""
@@ -273,7 +273,7 @@ class ReportService:
         Pending runs (no started_at yet) are counted separately.
         """
         granularity = cls.resolve_granularity(since, until)
-        trunc_fn = _trunc_fn(granularity)
+        trunc_fn = _trunc_fn(granularity, _dialect(db))
 
         bucket_rows = db.execute(text(f"""
             SELECT
@@ -281,10 +281,10 @@ class ReportService:
                 COUNT(*) AS total_runs,
                 COUNT(started_at) AS dispatched_runs,
                 AVG(CASE WHEN started_at IS NOT NULL
-                    THEN {_epoch_diff('started_at', 'triggered_at')}
+                    THEN {_epoch_diff('started_at', 'triggered_at', _dialect(db))}
                     END) AS avg_wait,
                 MAX(CASE WHEN started_at IS NOT NULL
-                    THEN {_epoch_diff('started_at', 'triggered_at')}
+                    THEN {_epoch_diff('started_at', 'triggered_at', _dialect(db))}
                     END) AS max_wait
             FROM test_runs
             WHERE org_id = :org_id
@@ -427,7 +427,7 @@ class ReportService:
             if row[5] and row[6]:   # started_at and completed_at
                 dur = (row[6] - row[5]).total_seconds()
                 if dur >= 0:
-                    agents[agent_id]["durations"].append(dur)
+                    agents[agent_id]["durations"].extend([dur] * row[2])
 
         data = []
         for agent_id, info in agents.items():
@@ -487,7 +487,7 @@ class ReportService:
               AND r.triggered_at >= :since
               AND r.triggered_at < :until
               AND r.status IN ('COMPLETED', 'FAILED')
-            ORDER BY r.test_case_id, r.triggered_at ASC
+            ORDER BY r.test_case_id, r.triggered_at ASC, r.id ASC
         """), {"org_id": str(org_id), "since": since, "until": until}).fetchall()
 
         # Group by test case and compute transitions
@@ -565,7 +565,7 @@ class ReportService:
         Optional: filter to a specific test case.
         """
         granularity = cls.resolve_granularity(since, until)
-        trunc_fn = _trunc_fn(granularity)
+        trunc_fn = _trunc_fn(granularity, _dialect(db))
 
         params: dict = {"org_id": str(org_id), "since": since, "until": until}
         tc_filter = ""
@@ -629,7 +629,7 @@ class ReportService:
         Optional: filter to a specific test case.
         """
         granularity = cls.resolve_granularity(since, until)
-        trunc_fn = _trunc_fn(granularity)
+        trunc_fn = _trunc_fn(granularity, _dialect(db))
 
         params: dict = {"org_id": str(org_id), "since": since, "until": until}
         tc_filter = ""
@@ -641,7 +641,7 @@ class ReportService:
         rows = db.execute(text(f"""
             SELECT
                 {trunc_fn('triggered_at')} AS bucket,
-                {_epoch_diff('completed_at', 'started_at')} AS duration_s
+                {_epoch_diff('completed_at', 'started_at', _dialect(db))} AS duration_s
             FROM test_runs
             WHERE org_id = :org_id
               AND triggered_at >= :since
@@ -683,38 +683,29 @@ class ReportService:
 
 # ── Private SQL helpers ───────────────────────────────────────────────────────
 
-def _trunc_fn(granularity: str):
-    """Return a callable that wraps a column name in the appropriate TRUNC expression."""
+def _dialect(db: Session) -> str:
+    """Use the actual connection dialect, never assume SQLite in production."""
+    name = db.get_bind().dialect.name
+    return "sqlite" if name == "sqlite" else "postgresql"
+
+
+def _trunc_fn(granularity: str, dialect: str = "postgresql"):
+    if granularity not in {"hour", "day", "week"}:
+        raise ValueError("Unsupported report granularity")
+    if dialect == "postgresql":
+        return lambda col: f"date_trunc('{granularity}', {col})"
     if granularity == "hour":
-        def fn(col: str) -> str:
-            return f"strftime('%Y-%m-%dT%H:00:00', {col})"
-    elif granularity == "week":
-        def fn(col: str) -> str:
-            # SQLite: round down to Monday
-            return f"date({col}, 'weekday 1', '-7 days')"
-    else:  # day
-        def fn(col: str) -> str:
-            return f"date({col})"
-    return fn
+        return lambda col: f"strftime('%Y-%m-%dT%H:00:00', {col})"
+    if granularity == "week":
+        # weekday 1 advances to Monday; subtract six days first so Monday stays put.
+        return lambda col: f"date({col}, '-6 days', 'weekday 1')"
+    return lambda col: f"date({col})"
 
 
-def _epoch_diff(col_end: str, col_start: str) -> str:
-    """
-    Return SQL expression for (col_end - col_start) in seconds.
-
-    SQLite: uses strftime('%s') trick.
-    PostgreSQL: EXTRACT(EPOCH FROM (col_end - col_start))
-
-    Since tests run on SQLite, we use the SQLite form.
-    For production PostgreSQL we rely on the fact that both dialects are
-    supported by choosing the SQLite-compatible form, which PostgreSQL
-    also accepts via its datetime arithmetic compatibility layer.
-
-    NOTE: strftime('%s', ...) is SQLite-specific. If this ever needs to
-    run on PostgreSQL only, replace with:
-        EXTRACT(EPOCH FROM (completed_at - started_at))
-    """
-    return f"(strftime('%s', {col_end}) - strftime('%s', {col_start}))"
+def _epoch_diff(col_end: str, col_start: str, dialect: str = "postgresql") -> str:
+    if dialect == "sqlite":
+        return f"((julianday({col_end}) - julianday({col_start})) * 86400.0)"
+    return f"EXTRACT(EPOCH FROM ({col_end} - {col_start}))"
 
 
 def _fmt_dt(value) -> Optional[str]:

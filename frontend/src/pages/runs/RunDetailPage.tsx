@@ -17,7 +17,7 @@ import {
   RadioButtonUnchecked as QueuedIcon,
   PlayArrow as RunningIcon,
   AccessTime as WaitIcon,
-  ErrorOutline as ErrorIcon,
+  ErrorOutlined as ErrorIcon,
   Download as DownloadIcon,
   Image as ScreenshotIcon,
   VideoFile as VideoIcon,
@@ -126,7 +126,7 @@ function OverviewTab({ run }: { run: TestRun }) {
       {/* Progress bar */}
       {run.total_steps !== null && (
         <Paper sx={{ bgcolor: "#0d0d1a", p: 2, mb: 2, borderRadius: 2 }}>
-          <Stack direction="row" justifyContent="space-between" mb={1}>
+          <Stack direction="row" sx={{ justifyContent: "space-between", mb: 1 }} >
             <Typography sx={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
               Step Progress
             </Typography>
@@ -140,13 +140,13 @@ function OverviewTab({ run }: { run: TestRun }) {
                     background: run.status === "COMPLETED" ? "#4caf50"
                               : run.status === "FAILED" ? "#f44336" : "#667eea",
                   }}} />
-          <Stack direction="row" spacing={3} mt={1}>
+          <Stack direction="row" spacing={3} sx={{ mt: 1 }}>
             {[
               ["Passed",  run.passed_steps,  "#4caf50"],
               ["Failed",  run.failed_steps,  "#f44336"],
               ["Skipped", run.skipped_steps, "#9e9e9e"],
             ].map(([label, count, color]) => (
-              <Stack key={String(label)} direction="row" spacing={0.5} alignItems="center">
+              <Stack key={String(label)} direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                 <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: color }} />
                 <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
                   {label}: {count}
@@ -200,14 +200,14 @@ function StepsTab({ runId }: { runId: string }) {
   );
 
   return (
-    <Stack spacing={1} mt={1}>
+    <Stack spacing={1} sx={{ mt: 1 }}>
       {steps.map((s) => {
         const stat = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.QUEUED;
         const StatIcon = stat.Icon;
         return (
           <Paper key={s.id} sx={{ bgcolor: "#0d0d1a", borderRadius: 2, px: 2, py: 1.5,
             borderLeft: `3px solid ${stat.color}` }}>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
               <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.3)", minWidth: 24, textAlign: "right" }}>
                 {s.position}
               </Typography>
@@ -227,7 +227,7 @@ function StepsTab({ runId }: { runId: string }) {
                   </Typography>
                 )}
               </Box>
-              <Stack direction="row" spacing={2} alignItems="center">
+              <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                 {s.duration_ms !== null && (
                   <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
                     {s.duration_ms < 1000 ? `${s.duration_ms}ms` : `${(s.duration_ms / 1000).toFixed(2)}s`}
@@ -275,10 +275,10 @@ function EventsTab({ runId, runStatus }: { runId: string; runStatus: string }) {
   if (isLoading) return <LinearProgress sx={{ mt: 2 }} />;
 
   return (
-    <Box mt={1}>
+    <Box sx={{ mt: 1 }}>
       {/* Live indicator */}
       {isActive && (
-        <Stack direction="row" alignItems="center" spacing={1} mb={1.5}>
+        <Stack direction="row" sx={{ alignItems: "center", mb: 1.5 }} spacing={1} >
           <Box sx={{
             width: 8, height: 8, borderRadius: "50%",
             bgcolor: connected ? "#4caf50" : "#ff9800",
@@ -353,7 +353,7 @@ function RetriesTab({ runId }: { runId: string }) {
   const retries = data?.retries ?? [];
 
   return (
-    <Box mt={2}>
+    <Box sx={{ mt: 2 }}>
       {data && (
         <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.4)", mb: 2 }}>
           Root run: <span style={{ color: "#667eea", fontFamily: "monospace" }}>
@@ -363,7 +363,7 @@ function RetriesTab({ runId }: { runId: string }) {
       )}
 
       {/* Origin run */}
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+      <Stack direction="row"  spacing={1.5} sx={{ alignItems: "center", ...({ mb: 1 }) }}>
         <Box sx={{
           width: 28, height: 28, borderRadius: "50%",
           bgcolor: "rgba(102,126,234,0.15)", border: "1px solid #667eea",
@@ -384,7 +384,7 @@ function RetriesTab({ runId }: { runId: string }) {
       </Stack>
 
       {retries.map((r, i) => (
-        <Stack key={r.run_id} direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+        <Stack key={r.run_id} direction="row"  spacing={1.5} sx={{ alignItems: "center", ...({ mb: 1 }) }}>
           {/* Connector line */}
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
             <Box sx={{ width: 1, height: 8, bgcolor: "rgba(255,255,255,0.1)" }} />
@@ -403,7 +403,7 @@ function RetriesTab({ runId }: { runId: string }) {
             border: r.run_id === runId ? "1px solid #667eea" : "1px solid rgba(255,255,255,0.06)",
             cursor: "pointer", "&:hover": { borderColor: "#667eea" },
           }} onClick={() => navigate(`/runs/${r.run_id}`)}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
               <Typography sx={{ fontSize: 13, color: "#fff", flex: 1 }}>
                 Retry {r.attempt}
                 {r.run_id === runId && (
@@ -491,7 +491,7 @@ function ArtifactsTab({ runId }: { runId: string }) {
   );
 
   return (
-    <Stack spacing={1} mt={1}>
+    <Stack spacing={1} sx={{ mt: 1 }}>
       {artifacts.map((a: any) => {
         const color = ARTIFACT_COLORS[a.artifact_type] ?? "#9e9e9e";
         const icon = ARTIFACT_ICONS[a.artifact_type] ?? <LogIcon sx={{ fontSize: 16 }} />;
@@ -503,7 +503,7 @@ function ArtifactsTab({ runId }: { runId: string }) {
             "&:hover": { borderColor: `${color}44` },
             transition: "border-color 0.2s",
           }}>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
               <Box sx={{
                 width: 32, height: 32, borderRadius: 1.5,
                 bgcolor: `${color}18`,
@@ -516,7 +516,7 @@ function ArtifactsTab({ runId }: { runId: string }) {
                 <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 500 }}>
                   {a.filename}
                 </Typography>
-                <Stack direction="row" spacing={1.5} mt={0.25} alignItems="center">
+                <Stack direction="row" spacing={1.5} sx={{ mt: 0.25, alignItems: "center" }} >
                   <Chip label={a.artifact_type} size="small" sx={{
                     fontSize: 10, fontWeight: 600,
                     bgcolor: `${color}18`, color, border: "none",
@@ -627,13 +627,13 @@ export default function RunDetailPage() {
   return (
     <Box>
       {/* Back + header */}
-      <Stack direction="row" alignItems="flex-start" spacing={2} mb={3}>
+      <Stack direction="row" sx={{ alignItems: "flex-start", mb: 3 }} spacing={2} >
         <IconButton onClick={() => navigate("/runs")}
           sx={{ color: "rgba(255,255,255,0.5)", "&:hover": { color: "#fff" }, mt: 0.5 }}>
           <BackIcon />
         </IconButton>
         <Box sx={{ flex: 1 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" gap={1}>
+          <Stack direction="row" sx={{ alignItems: "center", flexWrap: "wrap", gap: 1 }} spacing={1.5}  >
             <Chip
               label={run.status}
               icon={<StatIcon sx={{ fontSize: 14 }} />}

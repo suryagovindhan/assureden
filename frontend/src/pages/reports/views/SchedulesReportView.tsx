@@ -51,7 +51,7 @@ export default function SchedulesReportView({ params }: { params: ReportParams }
               border: `1px solid ${row.miss_rate > 0.3 ? "rgba(244,67,54,0.2)" : "rgba(255,255,255,0.06)"}`,
               borderRadius: 2, p: 2,
             }}>
-              <Stack direction="row" alignItems="flex-start" spacing={2} mb={1.5}>
+              <Stack direction="row" sx={{ alignItems: "flex-start", mb: 1.5 }} spacing={2} >
                 <Box sx={{ flex: 1 }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{row.job_name}</Typography>
                   <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>
@@ -70,11 +70,11 @@ export default function SchedulesReportView({ params }: { params: ReportParams }
               </Stack>
 
               <Stack spacing={0.75}>
-                <Stack direction="row" alignItems="center" spacing={2}>
+                <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                   <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.4)", minWidth: 60 }}>Hit rate</Typography>
                   <RateBar value={row.hit_rate} color={hitColor} />
                 </Stack>
-                <Stack direction="row" alignItems="center" spacing={2}>
+                <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                   <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.4)", minWidth: 60 }}>Miss rate</Typography>
                   <RateBar value={row.miss_rate} color={row.miss_rate > 0 ? "#f44336" : "#4caf50"} />
                 </Stack>

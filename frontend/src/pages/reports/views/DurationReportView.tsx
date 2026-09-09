@@ -43,7 +43,7 @@ export default function DurationReportView({ params }: { params: DurationParams 
   return (
     <Box>
       {/* Summary */}
-      <Stack direction="row" spacing={2} mb={3} flexWrap="wrap">
+      <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: "wrap" }} >
         {[
           { label: "Avg Duration (overall)", value: fmtSec(overallAvg), color: "#667eea" },
           { label: "Max P95 Duration", value: fmtSec(overallP95), color: "#9c27b0" },
@@ -57,16 +57,16 @@ export default function DurationReportView({ params }: { params: DurationParams 
       </Stack>
 
       <Paper sx={{ bgcolor: "#0d0d1a", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
-        <Stack direction="row" alignItems="center" px={2.5} pt={2} pb={1} spacing={2}>
+        <Stack direction="row" sx={{ alignItems: "center", px: 2.5, pt: 2, pb: 1 }}    spacing={2}>
           <Typography sx={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)" }}>
             Duration Trend · {data?.granularity} buckets
           </Typography>
-          <Stack direction="row" spacing={1.5} ml="auto !important">
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack direction="row" spacing={1.5} sx={{ ml: "auto !important" }}>
+            <Stack direction="row" sx={{ alignItems: "center" }} spacing={0.5}>
               <Box sx={{ width: 16, height: 4, borderRadius: 1, bgcolor: "#667eea" }} />
               <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Avg</Typography>
             </Stack>
-            <Stack direction="row" alignItems="center" spacing={0.5}>
+            <Stack direction="row" sx={{ alignItems: "center" }} spacing={0.5}>
               <Box sx={{ width: 16, height: 4, borderRadius: 1, bgcolor: "#9c27b0", borderStyle: "dashed", border: "2px dashed #9c27b0" }} />
               <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>P95</Typography>
             </Stack>
@@ -90,11 +90,11 @@ export default function DurationReportView({ params }: { params: DurationParams 
           const avgPct = maxP95 > 0 && pt.avg_duration_seconds != null ? Math.min((pt.avg_duration_seconds / maxP95) * 100, 100) : 0;
           const p95Pct = maxP95 > 0 && pt.p95_duration_seconds != null ? Math.min((pt.p95_duration_seconds / maxP95) * 100, 100) : 0;
           return (
-            <Stack key={pt.date} direction="row" alignItems="center" spacing={2} sx={{
+            <Stack key={pt.date} direction="row"  spacing={2} sx={{ alignItems: "center", ...({
               px: 2, py: 1.25,
               borderBottom: i < points.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
               "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-            }}>
+            }) }}>
               <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.5)", minWidth: 140 }}>{pt.date}</Typography>
               <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.4)", minWidth: 60, textAlign: "right" }}>{pt.run_count}</Typography>
               <Typography sx={{ fontSize: 12, color: "#667eea", minWidth: 80, textAlign: "right" }}>{fmtSec(pt.avg_duration_seconds)}</Typography>

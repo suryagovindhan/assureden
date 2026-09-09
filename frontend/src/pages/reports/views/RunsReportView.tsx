@@ -49,7 +49,7 @@ function MiniBar({ label, value, total, color }: { label: string; value: number;
   const pct = total > 0 ? (value / total) * 100 : 0;
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" mb={0.5}>
+      <Stack direction="row" sx={{ justifyContent: "space-between", mb: 0.5 }} >
         <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.65)" }}>{label}</Typography>
         <Typography sx={{ fontSize: 12, color }}>
           {value} <Typography component="span" sx={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
@@ -79,7 +79,7 @@ export default function RunsReportView({ params }: { params: ReportParams }) {
   return (
     <Box>
       {/* Summary cards */}
-      <Stack direction="row" spacing={2} flexWrap="wrap" mb={3}>
+      <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap", mb: 3 }} >
         <SummaryCard label="Total Runs" value={total} color="#667eea" />
         <SummaryCard label="Passed" value={by_status["COMPLETED"] ?? 0} color="#4caf50" />
         <SummaryCard label="Failed" value={by_status["FAILED"] ?? 0} color="#f44336" />
@@ -88,7 +88,7 @@ export default function RunsReportView({ params }: { params: ReportParams }) {
 
       <Grid container spacing={2}>
         {/* Status breakdown */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ bgcolor: "#0d0d1a", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, p: 2.5 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)", mb: 2 }}>
               By Status
@@ -108,7 +108,7 @@ export default function RunsReportView({ params }: { params: ReportParams }) {
         </Grid>
 
         {/* Priority breakdown */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ bgcolor: "#0d0d1a", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, p: 2.5 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)", mb: 2 }}>
               By Priority
@@ -128,7 +128,7 @@ export default function RunsReportView({ params }: { params: ReportParams }) {
         </Grid>
 
         {/* Trend */}
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Paper sx={{ bgcolor: "#0d0d1a", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, p: 2.5 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)", mb: 2 }}>
               Run Volume · {data.granularity} buckets
@@ -140,7 +140,7 @@ export default function RunsReportView({ params }: { params: ReportParams }) {
                 {data.data.trend.map((pt) => {
                   const barPct = total > 0 ? (pt.count / Math.max(...data.data.trend.map((p) => p.count))) * 100 : 0;
                   return (
-                    <Stack key={pt.date} direction="row" alignItems="center" spacing={1.5}>
+                    <Stack key={pt.date} direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
                       <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.35)", minWidth: 140 }}>
                         {pt.date}
                       </Typography>

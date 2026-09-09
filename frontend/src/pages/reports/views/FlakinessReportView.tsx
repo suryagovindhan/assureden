@@ -51,7 +51,7 @@ export default function FlakinessReportView({ params }: { params: FlakinessParam
     <Box>
       {/* Filter controls */}
       <Paper sx={{ bgcolor: "#0d0d1a", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, p: 2, mb: 2.5 }}>
-        <Stack direction="row" alignItems="center" spacing={3} flexWrap="wrap">
+        <Stack direction="row" sx={{ alignItems: "center", flexWrap: "wrap" }} spacing={3} >
           <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.5)", minWidth: 120 }}>
             Min flakiness score
           </Typography>
@@ -76,7 +76,7 @@ export default function FlakinessReportView({ params }: { params: FlakinessParam
       </Paper>
 
       {/* Legend */}
-      <Stack direction="row" spacing={2} mb={2} alignItems="center">
+      <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: "center" }} >
         <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Score bands:</Typography>
         {[
           { label: "< 10% (stable)",   color: "#4caf50" },
@@ -119,11 +119,11 @@ export default function FlakinessReportView({ params }: { params: FlakinessParam
           </Stack>
 
           {rows.map((row, i) => (
-            <Stack key={row.test_case_id} direction="row" alignItems="center" spacing={2} sx={{
+            <Stack key={row.test_case_id} direction="row"  spacing={2} sx={{ alignItems: "center", ...({
               px: 2, py: 1.5,
               borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
               "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-            }}>
+            }) }}>
               <Box sx={{ flex: 3, minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {row.test_case_name ?? "Unnamed"}

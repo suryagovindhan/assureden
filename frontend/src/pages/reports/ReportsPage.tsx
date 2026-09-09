@@ -25,7 +25,7 @@ import {
   Schedule as ScheduleIcon,
   SmartToy as AgentIcon,
   BugReport as FlakyIcon,
-  CheckCircleOutline as PassIcon,
+  CheckCircleOutlined as PassIcon,
   Timer as DurIcon,
 } from "@mui/icons-material";
 import type { Period, ReportParams } from "../../lib/api/reports";
@@ -109,13 +109,13 @@ function TimeRangeSelector({
           ))}
         </ToggleButtonGroup>
       ) : (
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           <TextField
             size="small" type="datetime-local"
             value={value.since}
             onChange={(e) => onChange({ ...value, since: e.target.value })}
             label="From"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             sx={{ input: { color: "#fff", fontSize: 12 }, label: { color: "rgba(255,255,255,0.4)" },
                   "& .MuiOutlinedInput-root": { borderRadius: 1.5,
                     "& fieldset": { borderColor: "rgba(255,255,255,0.1)" },
@@ -128,7 +128,7 @@ function TimeRangeSelector({
             value={value.until}
             onChange={(e) => onChange({ ...value, until: e.target.value })}
             label="To"
-            InputLabelProps={{ shrink: true }}
+            slotProps={{ inputLabel: { shrink: true } }}
             sx={{ input: { color: "#fff", fontSize: 12 }, label: { color: "rgba(255,255,255,0.4)" },
                   "& .MuiOutlinedInput-root": { borderRadius: 1.5,
                     "& fieldset": { borderColor: "rgba(255,255,255,0.1)" },
@@ -162,7 +162,7 @@ export default function ReportsPage() {
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1200, mx: "auto" }}>
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" mb={2.5}>
+      <Stack direction="row" sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 2.5 }}  >
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff", mb: 0.5 }}>
             Reports

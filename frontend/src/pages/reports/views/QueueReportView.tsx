@@ -40,7 +40,7 @@ export default function QueueReportView({ params }: { params: ReportParams }) {
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} flexWrap="wrap" mb={3}>
+      <Stack direction="row" spacing={2} sx={{ flexWrap: "wrap", mb: 3 }} >
         <StatCard
           label="Avg Queue Wait"
           value={overallAvg != null ? `${overallAvg.toFixed(1)}s` : "—"}
@@ -71,7 +71,7 @@ export default function QueueReportView({ params }: { params: ReportParams }) {
               ? Math.min((pt.avg_wait_seconds / maxWait) * 100, 100)
               : 0;
             return (
-              <Stack key={pt.date} direction="row" alignItems="center" spacing={1} sx={{ px: 1, py: 0.5 }}>
+              <Stack key={pt.date} direction="row"  spacing={1} sx={{ alignItems: "center", ...({ px: 1, py: 0.5 }) }}>
                 <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.35)", minWidth: 140 }}>{pt.date}</Typography>
                 <Typography sx={{ fontSize: 11, color: "rgba(255,255,255,0.5)", minWidth: 80, textAlign: "right" }}>{pt.total_runs}</Typography>
                 <Box sx={{ flex: 1, height: 8, borderRadius: 2, bgcolor: "rgba(255,255,255,0.04)" }}>

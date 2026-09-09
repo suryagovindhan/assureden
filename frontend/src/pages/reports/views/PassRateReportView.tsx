@@ -8,7 +8,7 @@ function PassRateBar({ rate }: { rate: number | null }) {
   const pct = rate * 100;
   const color = pct >= 90 ? "#4caf50" : pct >= 70 ? "#ff9800" : "#f44336";
   return (
-    <Stack direction="row" alignItems="center" spacing={1} flex={1}>
+    <Stack direction="row" sx={{ flex: 1, ...({ alignItems: "center" }) }} spacing={1} >
       <Box sx={{ flex: 1, height: 8, borderRadius: 2, bgcolor: "rgba(255,255,255,0.06)" }}>
         <Box sx={{ width: `${pct}%`, height: "100%", borderRadius: 2, bgcolor: color, transition: "width 0.5s" }} />
       </Box>
@@ -45,7 +45,7 @@ export default function PassRateReportView({ params }: { params: PassRateParams 
   return (
     <Box>
       {/* Summary */}
-      <Stack direction="row" spacing={2} mb={3} flexWrap="wrap">
+      <Stack direction="row" spacing={2} sx={{ mb: 3, flexWrap: "wrap" }} >
         {[
           { label: "Overall Pass Rate", value: overallRate != null ? `${(overallRate * 100).toFixed(1)}%` : "—", color: overallRate != null && overallRate >= 0.9 ? "#4caf50" : "#ff9800" },
           { label: "Total Passed", value: String(totalPassed), color: "#4caf50" },
@@ -74,11 +74,11 @@ export default function PassRateReportView({ params }: { params: PassRateParams 
         </Stack>
 
         {points.map((pt, i) => (
-          <Stack key={pt.date} direction="row" alignItems="center" spacing={2} sx={{
+          <Stack key={pt.date} direction="row"  spacing={2} sx={{ alignItems: "center", ...({
             px: 2, py: 1.25,
             borderBottom: i < points.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
             "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-          }}>
+          }) }}>
             <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.5)", minWidth: 140 }}>{pt.date}</Typography>
             <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,0.6)", minWidth: 60, textAlign: "right" }}>{pt.total}</Typography>
             <Typography sx={{ fontSize: 12, color: "#4caf50", minWidth: 60, textAlign: "right" }}>{pt.passed}</Typography>

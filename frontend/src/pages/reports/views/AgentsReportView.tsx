@@ -56,11 +56,11 @@ export default function AgentsReportView({ params }: { params: ReportParams }) {
             const passColor = Number(passRate) >= 90 ? "#4caf50"
               : Number(passRate) >= 70 ? "#ff9800" : "#f44336";
             return (
-              <Stack key={row.agent_id} direction="row" alignItems="center" spacing={2} sx={{
+              <Stack key={row.agent_id} direction="row"  spacing={2} sx={{ alignItems: "center", ...({
                 px: 2, py: 1.5,
                 borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                 "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-              }}>
+              }) }}>
                 <Box sx={{ flex: 2 }}>
                   <Typography sx={{ fontSize: 13, color: "#fff", fontWeight: 500 }}>
                     {row.agent_name ?? "Unknown"}
