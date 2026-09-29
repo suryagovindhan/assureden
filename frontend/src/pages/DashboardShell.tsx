@@ -51,6 +51,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Suites",     path: "/test-cases",     icon: <SuiteIcon />,    minRole: 0 },
       { label: "All Cases",  path: "/test-cases/all", icon: <AllCasesIcon />, minRole: 0 },
+      { label: "Record a test", path: "/drafts", icon: <CaseIcon />, minRole: 1 },
       { label: "My Cases",   path: "/test-cases/all?owner=me", icon: <CaseIcon />, minRole: 0 },
     ],
   },
@@ -58,7 +59,7 @@ const NAV_GROUPS = [
     label: "Environments & Flows",
     items: [
       { label: "Environments", path: "/environments", icon: <EnvIcon />,  minRole: 0 },
-      { label: "Flows",        path: "/flows",         icon: <FlowIcon />, minRole: 0 },
+      { label: "Actions & Flows",        path: "/flows",         icon: <FlowIcon />, minRole: 0 },
     ],
   },
   {

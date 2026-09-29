@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box, Typography, Chip, Button, TextField, Select,
@@ -29,6 +30,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function AllCasesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const ownerMe = searchParams.get("owner") === "me";
 
@@ -89,6 +91,7 @@ export default function AllCasesPage() {
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
+          {user && user.role !== "VIEWER" && <Button variant="outlined" onClick={() => navigate("/drafts")}>Record a test</Button>}
           <Tooltip title="Refresh">
             <IconButton onClick={() => refetch()} sx={{ color: "#64748b" }}>
               <RefreshIcon />

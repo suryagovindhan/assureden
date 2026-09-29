@@ -56,6 +56,7 @@ class TestRunRepository(OrgScopedRepository[TestRun]):
 
     def cancel(self, run: TestRun) -> TestRun:
         """QUEUED → CANCELLED. Returns error if not in QUEUED state."""
+        self.db.refresh(run, with_for_update=True)
         if run.status != RunStatus.QUEUED:
             from fastapi import HTTPException
             raise HTTPException(
@@ -69,6 +70,7 @@ class TestRunRepository(OrgScopedRepository[TestRun]):
 
     def abort(self, run: TestRun) -> TestRun:
         """RUNNING → ABORTED. Returns error if not in RUNNING state."""
+        self.db.refresh(run, with_for_update=True)
         if run.status not in (RunStatus.RUNNING, RunStatus.DISPATCHED):
             from fastapi import HTTPException
             raise HTTPException(

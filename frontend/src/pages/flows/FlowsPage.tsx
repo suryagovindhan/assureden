@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import {
   Box, Typography, Button, Chip, IconButton, Tooltip,
@@ -5,7 +6,7 @@ import {
   TextField, Alert, CircularProgress,
   Table, TableBody, TableCell, TableHead, TableRow,
   TableContainer, Paper, Tabs, Tab,
-  InputAdornment,
+  InputAdornment, MenuItem,
 } from "@mui/material";
 import { Add, Delete, ContentCopy, Search, DragIndicator } from "@mui/icons-material";
 import {
@@ -179,6 +180,7 @@ function FlowDetailDialog({ flow, open, onClose, onUpdated }: {
 // ── Create Flow Dialog ─────────────────────────────────────────────────────────
 function CreateFlowDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<"FLOW" | "BUSINESS_ACTION">("FLOW");
   const [desc, setDesc] = useState("");
   const [tags, setTags] = useState("");
   const [loading, setLoading] = useState(false);
@@ -189,7 +191,7 @@ function CreateFlowDialog({ open, onClose, onCreated }: { open: boolean; onClose
     setLoading(true);
     try {
       await createFlow({
-        name: name.trim(),
+        name: name.trim(), kind,
         description: desc || undefined,
         tags: tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
       });
@@ -203,11 +205,14 @@ function CreateFlowDialog({ open, onClose, onCreated }: { open: boolean; onClose
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
       slotProps={{ paper: { sx: { bgcolor: "#13132a", color: "#fff" } } }}>
-      <DialogTitle>New Reusable Flow</DialogTitle>
+      <DialogTitle>New reusable asset</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField label="Flow Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth size="small" sx={TF_SX} />
+          <TextField select label="Asset type" value={kind} onChange={e => setKind(e.target.value as typeof kind)} sx={TF_SX}>
+            <MenuItem value="FLOW">Flow</MenuItem><MenuItem value="BUSINESS_ACTION">Business action</MenuItem>
+          </TextField>
+          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth size="small" sx={TF_SX} />
           <TextField label="Description" value={desc} onChange={(e) => setDesc(e.target.value)} fullWidth size="small" sx={TF_SX} />
           <TextField label="Tags (comma-separated)" value={tags} onChange={(e) => setTags(e.target.value)} fullWidth size="small" sx={TF_SX} />
         </Box>
@@ -225,6 +230,8 @@ function CreateFlowDialog({ open, onClose, onCreated }: { open: boolean; onClose
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function FlowsPage() {
+  const [params] = useSearchParams();
+  const requestedFlow = params.get('flow');
   const [flows, setFlows] = useState<Flow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -244,6 +251,13 @@ export default function FlowsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!requestedFlow) return;
+    let active = true;
+    getFlow(requestedFlow).then(flow => { if (active) setSelected(flow); })
+      .catch(() => { if (active) setError('Could not open the promoted flow.'); });
+    return () => { active = false; };
+  }, [requestedFlow]);
 
   const handleSearch = (v: string) => { setSearch(v); load(v); };
 
@@ -251,7 +265,7 @@ export default function FlowsPage() {
     <Box sx={{ p: 3, color: "#e0e0ff", minHeight: "100vh" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff" }}>Reusable Flows</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff" }}>Business Actions & Flows</Typography>
           <Typography variant="body2" sx={{ color: "#666" }}>
             {total} flow{total !== 1 ? "s" : ""} · Version-pinned & checksum-verified
           </Typography>
@@ -303,7 +317,7 @@ export default function FlowsPage() {
                   sx={{ cursor: "pointer", "&:hover": { bgcolor: "#1e1e3a" } }}
                   onClick={() => setSelected(f)}>
                   <TableCell sx={{ color: "#e0e0ff", fontWeight: 600, borderBottom: "1px solid #1e1e3a" }}>
-                    {f.name}
+                    {f.name} <Chip size="small" label={f.kind === "BUSINESS_ACTION" ? "Business action" : "Flow"} />
                     {f.description && (
                       <Typography variant="caption" sx={{ display: "block", color: "#666" }}>{f.description}</Typography>
                     )}

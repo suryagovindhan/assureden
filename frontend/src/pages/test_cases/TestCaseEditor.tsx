@@ -27,8 +27,11 @@ import {
   type StepAction, type AssertionType,
 } from "../../lib/api/testCases";
 import PageObjectPicker, { type PickedPageObject } from "./PageObjectPicker";
+import { listFlows, listFlowRevisions } from "../../lib/api/flows";
+import RunTestButton from "../../components/RunTestButton";
 
 const ACTIONS: StepAction[] = [
+  "FLOW",
   "CLICK", "DOUBLE_CLICK", "RIGHT_CLICK", "TYPE", "APPEND", "CLEAR",
   "SELECT", "CHECK", "UNCHECK", "HOVER", "SCROLL_TO", "WAIT_FOR",
   "NAVIGATE", "SCREENSHOT", "EXECUTE_SCRIPT", "DRAG_DROP", "UPLOAD_FILE", "PRESS_KEY",
@@ -280,6 +283,8 @@ function AssertionPanel({
 // ─── Main Editor ──────────────────────────────────────────────────────────────
 
 type StepForm = {
+  flow_id: string | null;
+  flow_version: number | null;
   action: StepAction;
   input_value: string;
   target_url: string;
@@ -296,8 +301,18 @@ export default function TestCaseEditor() {
   const qc = useQueryClient();
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [stepForm, setStepForm] = useState<Partial<StepForm>>({});
   const [versionError, setVersionError] = useState<{ current: number; submitted: number } | null>(null);
+  const { data: flows, isError: flowsError } = useQuery({
+    queryKey: ["flow-picker"], queryFn: () => listFlows({ limit: 200 }),
+    enabled: stepForm.action === "FLOW",
+  });
+  const { data: revisions, isError: revisionsError } = useQuery({
+    queryKey: ["flow-revisions", stepForm.flow_id],
+    queryFn: () => listFlowRevisions(stepForm.flow_id!),
+    enabled: stepForm.action === "FLOW" && !!stepForm.flow_id,
+  });
 
   const { data: tc, isLoading, error } = useQuery({
     queryKey: ["test-case", case_id],
@@ -314,6 +329,8 @@ export default function TestCaseEditor() {
     const step = tc.steps.find((s) => s.id === selectedStepId);
     if (step) {
       setStepForm({
+        flow_id: step.flow_id,
+        flow_version: step.flow_version,
         action: step.action as StepAction,
         input_value: step.input_value ?? "",
         target_url: step.target_url ?? "",
@@ -328,20 +345,25 @@ export default function TestCaseEditor() {
 
   const { mutate: saveStep, isPending: savingStep } = useMutation({
     mutationFn: () => {
+      setSaveError(null);
       if (!selectedStepId) return Promise.reject(new Error("No step selected"));
       return stepsApi.update(selectedStepId, {
+        flow_id: stepForm.action === "FLOW" ? stepForm.flow_id : null,
+        flow_version: stepForm.action === "FLOW" ? stepForm.flow_version : null,
         action: stepForm.action,
-        input_value: stepForm.input_value || undefined,
-        target_url: stepForm.target_url || undefined,
+        input_value: stepForm.action === "FLOW" ? null : stepForm.input_value || null,
+        target_url: stepForm.action === "FLOW" ? null : stepForm.target_url || null,
         description: stepForm.description || undefined,
-        is_optional: stepForm.is_optional,
+        is_optional: stepForm.action === "FLOW" ? false : stepForm.is_optional,
         is_enabled: stepForm.is_enabled,
-        timeout_ms: stepForm.timeout_ms,
-        page_object_id: stepForm.page_object?.id || undefined,
+        timeout_ms: stepForm.action === "FLOW" ? 30000 : stepForm.timeout_ms,
+        page_object_id: stepForm.action === "FLOW" ? null : stepForm.page_object?.id || null,
       });
     },
     onSuccess: refresh,
     onError: (err: any) => {
+      const message = err?.response?.data?.detail;
+      setSaveError(typeof message === "string" ? message : "Could not save this step. Check the selected flow and revision.");
       // Surface 409 VERSION_CONFLICT inline — prevents silent overwrite
       if (err?.response?.status === 409) {
         const detail = err.response.data?.detail ?? {};
@@ -403,6 +425,7 @@ export default function TestCaseEditor() {
     <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", bgcolor: "#0d0d1a" }}>
       {/* Top bar */}
       <Box sx={{ px: 2.5, py: 1.5, borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 1.5 }}>
+        <RunTestButton caseId={tc.id} />
         <IconButton size="small" onClick={() => navigate("/test-cases")} sx={{ color: "#64748b" }}>
           <ArrowBack fontSize="small" />
         </IconButton>
@@ -431,6 +454,7 @@ export default function TestCaseEditor() {
       )}
 
       {/* Three-panel body */}
+      {saveError && <Alert severity="error" onClose={() => setSaveError(null)}>{saveError}</Alert>}
       <Box sx={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* Panel 1: Steps */}
         <Box sx={{ width: 200, borderRight: "1px solid rgba(255,255,255,0.06)", overflow: "hidden" }}>
@@ -485,7 +509,31 @@ export default function TestCaseEditor() {
                 </FormControl>
 
                 {/* PageObject picker */}
-                {!["NAVIGATE", "EXECUTE_SCRIPT", "SCREENSHOT"].includes(currentAction ?? "") && (
+                {currentAction === "FLOW" && <>
+                  <TextField select fullWidth size="small" label="Reusable flow"
+                    value={stepForm.flow_id ?? ""}
+                    onChange={(e) => {
+                      const flow = flows?.items.find((f) => f.id === e.target.value);
+                      setStepForm((f) => ({ ...f, flow_id: flow?.id ?? null, flow_version: flow?.version ?? null }));
+                    }}>
+                    {stepForm.flow_id && !flows?.items.some((f) => f.id === stepForm.flow_id) &&
+                      <MenuItem value={stepForm.flow_id}>Selected flow ({stepForm.flow_id})</MenuItem>}
+                    {(flows?.items ?? []).map((f) => <MenuItem key={f.id} value={f.id}>{f.name} ({f.kind === "BUSINESS_ACTION" ? "Business action" : "Flow"})</MenuItem>)}
+                  </TextField>
+                  <TextField select fullWidth size="small" label="Pinned revision"
+                    value={stepForm.flow_version ?? ""} disabled={!stepForm.flow_id}
+                    onChange={(e) => setStepForm((f) => ({ ...f, flow_version: Number(e.target.value) }))}>
+                    {stepForm.flow_version && !revisions?.some((r) => r.version === stepForm.flow_version) &&
+                      <MenuItem value={stepForm.flow_version}>v{stepForm.flow_version} (loading or unavailable)</MenuItem>}
+                    {(revisions ?? []).map((r) => <MenuItem key={r.version} value={r.version}>
+                      v{r.version} · {r.step_count} steps
+                    </MenuItem>)}
+                  </TextField>
+                  {(flowsError || revisionsError) && <Alert severity="error">Could not load flows or revision history.</Alert>}
+                  <Alert severity="info">Flow edits preserve this revision. Locators are frozen when a run is queued.
+                    Timeouts and optional behavior come from the flow's own steps. Use a separate test step for assertions.</Alert>
+                </>}
+                {!["FLOW", "NAVIGATE", "EXECUTE_SCRIPT", "SCREENSHOT"].includes(currentAction ?? "") && (
                   <PageObjectPicker
                     label="PageObject"
                     value={stepForm.page_object ?? null}
@@ -520,6 +568,7 @@ export default function TestCaseEditor() {
 
                 {/* Timeout */}
                 <TextField fullWidth size="small" label="Timeout (ms)" type="number"
+                  disabled={currentAction === "FLOW"}
                   value={stepForm.timeout_ms ?? 30000}
                   onChange={(e) => setStepForm((f) => ({ ...f, timeout_ms: Number(e.target.value) }))}
                   sx={{ "& .MuiOutlinedInput-root": { bgcolor: "rgba(255,255,255,0.03)", "& fieldset": { borderColor: "rgba(255,255,255,0.12)" } }, input: { color: "#e2e8f0" }, "& .MuiInputLabel-root": { color: "#64748b" } }} />
@@ -527,7 +576,7 @@ export default function TestCaseEditor() {
                 {/* Flags */}
                 <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <FormControlLabel
-                    control={<Switch size="small" checked={stepForm.is_optional ?? false} onChange={(e) => setStepForm((f) => ({ ...f, is_optional: e.target.checked }))} />}
+                    control={<Switch disabled={currentAction === "FLOW"} size="small" checked={currentAction === "FLOW" ? false : stepForm.is_optional ?? false} onChange={(e) => setStepForm((f) => ({ ...f, is_optional: e.target.checked }))} />}
                     label={<Typography variant="caption" sx={{ color: "#94a3b8" }}>Optional</Typography>}
                   />
                   <FormControlLabel
@@ -542,7 +591,7 @@ export default function TestCaseEditor() {
 
         {/* Panel 3: Assertions */}
         <Box sx={{ width: 260, borderLeft: "1px solid rgba(255,255,255,0.06)", overflow: "hidden" }}>
-          {selectedStep ? (
+          {selectedStep && currentAction !== "FLOW" ? (
             <AssertionPanel step={selectedStep} onRefresh={refresh} />
           ) : (
             <Box sx={{ p: 2, textAlign: "center", pt: 6 }}>

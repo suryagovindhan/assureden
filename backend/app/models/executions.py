@@ -121,6 +121,8 @@ class TestRun(Base):
 
     triggered_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", use_alter=True, ondelete="RESTRICT", name="fk_run_triggered_by"), nullable=True)
     triggered_at: Mapped[datetime]            = mapped_column(DateTime, default=utcnow, nullable=False)
+    available_after: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deadline_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     status:   Mapped[str] = mapped_column(_run_status_t,    nullable=False, default=RunStatus.QUEUED)
     priority: Mapped[str] = mapped_column(_run_priority_t,  nullable=False, default=RunPriority.NORMAL)

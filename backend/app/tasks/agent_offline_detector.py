@@ -40,12 +40,12 @@ def detect_offline_agents(self) -> dict:
                 Agent.last_heartbeat < threshold,
                 Agent.deleted_at.is_(None),
             )
+            .with_for_update(skip_locked=True)
             .all()
         )
 
         audit_repo = AuditEventRepository(db)
         for agent in stale_agents:
-            previous_status = agent.status
             agent.status = "OFFLINE"
             audit_repo.write(
                 org_id=agent.org_id,
@@ -53,9 +53,6 @@ def detect_offline_agents(self) -> dict:
                 entity_id=agent.id,
                 action="AGENT_OFFLINE",
                 actor_id=None,  # system action
-                extra={"previous_status": previous_status,
-                       "last_heartbeat": agent.last_heartbeat.isoformat()
-                       if agent.last_heartbeat else None},
             )
             marked_offline += 1
 

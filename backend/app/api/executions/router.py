@@ -12,22 +12,23 @@ Includes:
 """
 
 from typing import Optional
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser, require_role
 from app.db.session import get_db
 from app.db.repositories.executions import TestRunRepository, StepResultRepository, RunEventRepository
 from app.db.repositories.environments import EnvironmentRepository, EnvironmentVariableRepository
-from app.models.executions import RunStatus, RunPriority
+from app.models.executions import RunStatus, RunPriority, TestRun
 from app.models.environments import EnvironmentVariable
 from app.services.execution_engine import (
-    trigger_run, poll_for_run, process_agent_update, recover_expired_leases,
+    trigger_run, poll_for_run, process_agent_update,
     ExecutionService,
 )
 
@@ -52,18 +53,34 @@ def get_agent_from_api_key(
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class TriggerRunRequest(BaseModel):
+    requested_agent_id: Optional[UUID] = None
     test_case_id: UUID
     environment_id: Optional[UUID] = None
     run_variables: dict = {}
     priority: str = RunPriority.NORMAL
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
     minimum_protocol_version: int = 1
+
+
+class AgentStepResult(BaseModel):
+    execution_step_id: UUID
+    step_id: UUID
+    step_version: int = Field(ge=1)
+    position: int = Field(ge=1)
+    action: str
+    status: str
+    attempt: int = Field(default=1, ge=1)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    duration_ms: Optional[int] = Field(default=None, ge=0)
+    error_message: Optional[str] = Field(default=None, max_length=500)
+    assertions: list[dict] = Field(default_factory=list)
 
 
 class AgentUpdateRequest(BaseModel):
     lease_id: UUID
     status: Optional[str] = None
-    step_results: list[dict] = []
+    step_results: list[AgentStepResult] = Field(default_factory=list)
     error_message: Optional[str] = None
 
 
@@ -79,6 +96,8 @@ def _run_out(run) -> dict:
         "agent_version":            run.agent_version,
         "triggered_by":             str(run.triggered_by) if run.triggered_by else None,
         "triggered_at":             run.triggered_at.isoformat(),
+        "available_after":          run.available_after.isoformat() if run.available_after else None,
+        "deadline_at":              run.deadline_at.isoformat() if run.deadline_at else None,
         "status":                   run.status,
         "priority":                 run.priority,
         "started_at":               run.started_at.isoformat() if run.started_at else None,
@@ -132,7 +151,7 @@ def _event_out(ev) -> dict:
 
 # ── Run lifecycle ─────────────────────────────────────────────────────────────
 
-@router.post("/runs", status_code=status.HTTP_201_CREATED)
+@router.post("/runs", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 def trigger(
     body: TriggerRunRequest,
     current_user: CurrentUser = None,
@@ -168,6 +187,7 @@ def trigger(
         priority=body.priority,
         timeout_seconds=body.timeout_seconds,
         minimum_protocol_version=body.minimum_protocol_version,
+        requested_agent_id=body.requested_agent_id,
     )
     db.commit()
     db.refresh(run)
@@ -264,7 +284,7 @@ def get_run_events(
     return [_event_out(e) for e in events]
 
 
-@router.post("/runs/{run_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/runs/{run_id}/cancel", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("TESTER"))])
 def cancel_run(
     run_id: UUID,
     current_user: CurrentUser = None,
@@ -278,7 +298,7 @@ def cancel_run(
     db.commit()
 
 
-@router.post("/runs/{run_id}/abort", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/runs/{run_id}/abort", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("TESTER"))])
 def abort_run(
     run_id: UUID,
     current_user: CurrentUser = None,
@@ -292,7 +312,7 @@ def abort_run(
     db.commit()
 
 
-@router.post("/runs/{run_id}/retry", status_code=status.HTTP_201_CREATED)
+@router.post("/runs/{run_id}/retry", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 def retry_run(
     run_id: UUID,
     current_user: CurrentUser = None,
@@ -380,6 +400,7 @@ def agent_update(
         run_id=run_id,
         org_id=agent.org_id,
         lease_id=body.lease_id,
+        agent_id=agent.id,
         body=body.model_dump(),
     )
     db.commit()
@@ -397,9 +418,9 @@ def poll(
     Returns the agent execute_request payload (with plaintext secrets) or 204.
     """
     payload = poll_for_run(db=db, agent=agent, org_id=agent.org_id)
+    db.commit()
     if payload is None:
         return {"status": "no_work"}
-    db.commit()
     return payload
 
 
@@ -415,8 +436,12 @@ def heartbeat_extended(
     """
     from app.db.base import utcnow
     agent.last_heartbeat = utcnow()
-    caps = agent.capabilities or {}
-    for field in ("version", "build", "os", "architecture", "protocol_version", "supported_actions"):
+    active_run = db.scalar(select(TestRun.id).where(
+        TestRun.agent_id == agent.id, TestRun.status.in_(["DISPATCHED", "RUNNING"]),
+    ).limit(1))
+    agent.status = "RUNNING" if active_run else "IDLE"
+    caps = dict(agent.capabilities or {})
+    for field in ("version", "build", "os", "architecture", "protocol_version", "supported_actions", "recording"):
         if field in body:
             caps[field] = body[field]
     agent.capabilities = caps

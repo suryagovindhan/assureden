@@ -1,3 +1,4 @@
+from app.models.agent_control import AgentEnrollment, BrowserRecording
 from app.models.foundation import (
     Organization, User, Agent, AgentSession,
     AuditEvent, AssetRevision,
@@ -23,8 +24,10 @@ from app.models.schedules import (
     ScheduledJob, ScheduledRunHistory, RetryRecord,
 )
 from app.models.artifacts import RunArtifact  # Phase 5
+from app.models.drafts import DraftAsset
 
 __all__ = [
+    "DraftAsset",
     # Foundation
     "Organization", "User", "Agent", "AgentSession",
     "AuditEvent", "AssetRevision",

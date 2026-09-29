@@ -21,6 +21,7 @@ import RunsPage          from "./pages/runs/RunsPage";
 import RunDetailPage     from "./pages/runs/RunDetailPage";
 import SchedulesPage     from "./pages/schedules/SchedulesPage";
 import ReportsPage       from "./pages/reports/ReportsPage";
+import DraftsPage from "./pages/DraftsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +80,7 @@ export default function App() {
                   <Route path="/runs/:run_id"        element={<RunDetailPage />} />
                   <Route path="/schedules"           element={<SchedulesPage />} />
                   <Route path="/reports"             element={<ReportsPage />} />
+                  <Route path="/drafts"              element={<DraftsPage />} />
                   <Route path="/admin/users"   element={<UsersPage />} />
                   <Route path="/admin/agents"  element={<AgentsPage />} />
                 </Route>

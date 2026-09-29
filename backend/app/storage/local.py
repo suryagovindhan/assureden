@@ -47,7 +47,7 @@ class LocalStorageProvider(StorageProvider):
         """Resolve a storage key to an absolute filesystem path."""
         # Guard against path traversal
         resolved = (self._base / key).resolve()
-        if not str(resolved).startswith(str(self._base)):
+        if not resolved.is_relative_to(self._base) or resolved == self._base:
             raise ValueError(f"Unsafe artifact key: {key!r}")
         return resolved
 

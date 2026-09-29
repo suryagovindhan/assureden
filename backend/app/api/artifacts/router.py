@@ -23,6 +23,8 @@ import mimetypes
 import uuid
 from typing import Optional
 from uuid import UUID
+from pathlib import PurePosixPath
+from sqlalchemy import select
 
 from fastapi import (
     APIRouter, Depends, HTTPException, UploadFile, File, Form, status,
@@ -31,7 +33,10 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser, require_role
+from app.api.executions.router import get_agent_from_api_key
+from app.models.executions import TestRun, StepResult
+from app.db.base import utcnow
 from app.db.session import get_db
 from app.db.repositories.executions import TestRunRepository
 from app.models.artifacts import RunArtifact, ARTIFACT_TYPES
@@ -45,7 +50,7 @@ router = APIRouter(tags=["artifacts"])
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024  # 100 MB hard limit
 
 
-@router.post("/runs/{run_id}/artifacts", status_code=status.HTTP_201_CREATED)
+@router.post("/runs/{run_id}/artifacts", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 async def upload_artifact(
     run_id: UUID,
     file: UploadFile = File(...),
@@ -89,17 +94,26 @@ async def upload_artifact(
             detail=f"Artifact exceeds {MAX_ARTIFACT_BYTES // (1024*1024)} MB limit",
         )
 
-    filename = file.filename or f"{artifact_type.lower()}_{uuid.uuid4().hex[:8]}"
+    filename = PurePosixPath((file.filename or "artifact").replace("\\", "/")).name
+    filename = "".join(c for c in filename if c.isascii() and (c.isalnum() or c in "._-"))[:200] or "artifact"
     content_type = file.content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
     # ── Storage key: <org_id>/<run_id>/<type>/<filename> ─────────────────────
-    storage_key = f"{org_id}/{run_id}/{artifact_type.lower()}/{filename}"
+    storage_key = f"{org_id}/{run_id}/{artifact_type.lower()}/{uuid.uuid4().hex}/{filename}"
+
+    try:
+        step_result_uuid = UUID(step_result_id) if step_result_id else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid step result ID")
+    if step_result_uuid and not db.scalar(select(StepResult.id).where(
+        StepResult.id == step_result_uuid, StepResult.run_id == run_id, StepResult.org_id == org_id,
+    )):
+        raise HTTPException(status_code=422, detail="Step result does not belong to this run")
 
     storage = get_storage()
     storage.save(storage_key, data, content_type)
 
     # ── Persist metadata ──────────────────────────────────────────────────────
-    step_result_uuid = UUID(step_result_id) if step_result_id else None
 
     artifact = RunArtifact(
         org_id=org_id,
@@ -112,10 +126,44 @@ async def upload_artifact(
         content_type=content_type,
     )
     db.add(artifact)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        storage.delete(storage_key)
+        raise
     db.refresh(artifact)
 
     return _artifact_out(artifact)
+
+
+@router.post("/runs/{run_id}/agent-artifacts", status_code=201)
+async def upload_agent_artifact(
+    run_id: UUID, lease_id: UUID = Form(...), execution_step_id: UUID = Form(...),
+    file: UploadFile = File(...), db: Session = Depends(get_db),
+    agent=Depends(get_agent_from_api_key),
+):
+    run = db.scalar(select(TestRun).where(
+        TestRun.id == run_id, TestRun.org_id == agent.org_id,
+    ).with_for_update())
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if (run.agent_id != agent.id or run.lease_id != lease_id
+            or run.status not in {"DISPATCHED", "RUNNING"}
+            or not run.lease_expires_at or run.lease_expires_at <= utcnow()):
+        raise HTTPException(status_code=409, detail="Run lease is not active")
+    if run.deadline_at is not None and run.deadline_at <= utcnow():
+        raise HTTPException(status_code=409, detail="Execution deadline has expired")
+    result_id = db.scalar(select(StepResult.id).where(
+        StepResult.run_id == run_id, StepResult.execution_step_id == execution_step_id,
+    ))
+    if result_id is None:
+        raise HTTPException(status_code=422, detail="Submit the step result before its evidence")
+    # The modern agent currently uploads PNG screenshots only.
+    if file.content_type != "image/png" or await file.read(8) != b"\x89PNG\r\n\x1a\n":
+        raise HTTPException(status_code=422, detail="Expected a PNG screenshot")
+    await file.seek(0)
+    return await upload_artifact(run_id, file, "SCREENSHOT", str(result_id), agent, db)
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
@@ -172,11 +220,13 @@ def get_artifact(
             data = storage.read(artifact.storage_key)
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact file missing from storage")
+        disposition = "inline" if artifact.content_type in {"image/png", "image/jpeg"} else "attachment"
         return Response(
             content=data,
             media_type=artifact.content_type,
             headers={
-                "Content-Disposition": f'inline; filename="{artifact.filename}"',
+                "Content-Disposition": f'{disposition}; filename="{artifact.filename}"',
+                "X-Content-Type-Options": "nosniff",
                 "Content-Length": str(artifact.size_bytes),
             },
         )
@@ -189,7 +239,6 @@ def get_artifact(
 # ── Serialiser ────────────────────────────────────────────────────────────────
 
 def _artifact_out(a: RunArtifact) -> dict:
-    storage = get_storage()
     return {
         "id":              str(a.id),
         "run_id":          str(a.run_id),
@@ -198,6 +247,6 @@ def _artifact_out(a: RunArtifact) -> dict:
         "filename":        a.filename,
         "size_bytes":      a.size_bytes,
         "content_type":    a.content_type,
-        "url":             storage.presign(a.storage_key),
+        "url":             f"/api/artifacts/{a.id}",
         "created_at":      a.created_at.isoformat() if a.created_at else None,
     }

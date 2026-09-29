@@ -9,6 +9,9 @@ RUNNING timeout (agent lost during execution):
   - Immediately → ABORTED (different semantics from TIMED_OUT)
   - RunEvents: LEASE_EXPIRED → AGENT_LOST
 
+RUNNING execution deadline reached (even with a live agent):
+  - TIMED_OUT, RUN_TIMED_OUT event, timeout retry policy.
+
 Both paths call maybe_auto_retry() if configured.
 """
 
@@ -38,10 +41,8 @@ def _max_attempts(run: TestRun) -> int:
 
 
 def _next_sequence(db: Session, run_id: uuid.UUID) -> int:
-    from sqlalchemy import func
-    stmt = select(func.max(RunEvent.sequence)).where(RunEvent.run_id == run_id)
-    m = db.scalar(stmt)
-    return (m or 0) + 1
+    from app.services.execution_engine import _next_run_event_sequence
+    return _next_run_event_sequence(db, run_id)
 
 
 def _emit(db: Session, run_id: uuid.UUID, event: str, message: str,
@@ -82,6 +83,7 @@ def reap_expired_leases(self) -> dict:
     dispatched_requeued = 0
     dispatched_timed_out = 0
     running_aborted = 0
+    running_timed_out = 0
     retries_created = 0
 
     try:
@@ -113,7 +115,7 @@ def reap_expired_leases(self) -> dict:
                 run.lease_id = None
                 run.lease_expires_at = None
                 run.agent_id = None
-                run.dispatch_attempt_count += 1
+                # Poll counts actual dispatches; requeue must not count twice.
                 _emit(db, run.id, "RUN_REQUEUED",
                       f"Run requeued (attempt {run.dispatch_attempt_count}/{max_att})",
                       severity=EventSeverity.INFO)
@@ -148,13 +150,26 @@ def reap_expired_leases(self) -> dict:
             db.query(TestRun)
             .filter(
                 TestRun.status == RunStatus.RUNNING,
-                TestRun.lease_expires_at < now,
+                ((TestRun.lease_expires_at <= now) | (TestRun.deadline_at <= now)),
             )
             .with_for_update(skip_locked=True)
             .all()
         )
 
         for run in running_q:
+            if run.deadline_at is not None and run.deadline_at <= now:
+                run.status = RunStatus.TIMED_OUT
+                run.completed_at = now
+                run.lease_id = None
+                run.lease_expires_at = None
+                run.error_message = "Execution deadline exceeded"
+                _emit(db, run.id, "RUN_TIMED_OUT", run.error_message, severity=EventSeverity.ERROR)
+                _close_agent_session(db, run.id, "TIMED_OUT")
+                running_timed_out += 1
+                from app.tasks.auto_retry import maybe_auto_retry
+                if maybe_auto_retry(db, run, reason="TIMEOUT"):
+                    retries_created += 1
+                continue
             _emit(db, run.id, "LEASE_EXPIRED",
                   "Agent lease expired during active execution",
                   severity=EventSeverity.WARNING,
@@ -198,5 +213,6 @@ def reap_expired_leases(self) -> dict:
         "dispatched_requeued": dispatched_requeued,
         "dispatched_timed_out": dispatched_timed_out,
         "running_aborted": running_aborted,
+        "running_timed_out": running_timed_out,
         "retries_created": retries_created,
     }

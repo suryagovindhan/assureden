@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Typography, Chip, Stack, Button, Tabs, Tab,
   LinearProgress, Alert, Paper, Divider, Tooltip,
-  IconButton, CircularProgress, Collapse, Badge,
+  IconButton, CircularProgress, Collapse, Badge, Dialog, DialogContent,
 } from "@mui/material";
 import {
   ArrowBack as BackIcon,
@@ -30,6 +30,8 @@ import {
 } from "../../lib/api/executions";
 import { getRetryHistory } from "../../lib/api/metrics";
 import { useRunStream } from "../../lib/hooks/useRunStream";
+import api from "../../lib/api";
+import RunTestButton from "../../components/RunTestButton";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -461,6 +463,31 @@ function fmtBytes(n: number): string {
 }
 
 function ArtifactsTab({ runId }: { runId: string }) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const openArtifact = async (artifact: { id: string; filename: string; content_type: string }) => {
+    setLoadingId(artifact.id);
+    setError(null);
+    try {
+      const response = await api.get<Blob>(`/artifacts/${artifact.id}`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      if (artifact.content_type === "image/png" || artifact.content_type === "image/jpeg") {
+        setPreview(url);
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = artifact.filename;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch {
+      setError("Could not load this artifact. Try again.");
+    } finally {
+      setLoadingId(null);
+    }
+  };
   const { data, isLoading } = useQuery({
     queryKey: ["run-artifacts", runId],
     queryFn: () =>
@@ -485,13 +512,19 @@ function ArtifactsTab({ runId }: { runId: string }) {
         No artifacts have been uploaded for this run yet.
       </Typography>
       <Typography sx={{ color: "rgba(255,255,255,0.2)", fontSize: 12, mt: 0.5 }}>
-        Agents upload screenshots, videos, logs and traces automatically.
+        Screenshots appear after an agent uploads execution evidence.
       </Typography>
     </Box>
   );
 
   return (
     <Stack spacing={1} sx={{ mt: 1 }}>
+      {error && <Alert severity="error">{error}</Alert>}
+      <Dialog open={preview !== null} onClose={() => setPreview(null)} maxWidth="lg">
+        <DialogContent>
+          {preview && <Box component="img" src={preview} alt="Run screenshot" sx={{ maxWidth: "100%" }} />}
+        </DialogContent>
+      </Dialog>
       {artifacts.map((a: any) => {
         const color = ARTIFACT_COLORS[a.artifact_type] ?? "#9e9e9e";
         const icon = ARTIFACT_ICONS[a.artifact_type] ?? <LogIcon sx={{ fontSize: 16 }} />;
@@ -529,12 +562,12 @@ function ArtifactsTab({ runId }: { runId: string }) {
                   </Typography>
                 </Stack>
               </Box>
-              <Tooltip title="Download">
+              <Tooltip title="View or download">
                 <IconButton
                   size="small"
-                  component="a"
-                  href={a.url}
-                  download={a.filename}
+                  onClick={() => void openArtifact(a)}
+                  disabled={loadingId === a.id}
+                  aria-label={`View or download ${a.filename}`}
                   sx={{ color, "&:hover": { bgcolor: `${color}14` } }}
                 >
                   <DownloadIcon fontSize="small" />
@@ -674,11 +707,7 @@ export default function RunDetailPage() {
             </Button>
           )}
           {["FAILED", "TIMED_OUT", "ABORTED", "COMPLETED"].includes(run.status) && (
-            <Button variant="contained" size="small" startIcon={<RetryIcon />}
-              onClick={() => navigate(`/runs/${run.id}/retry`)}
-              sx={{ background: "linear-gradient(135deg, #667eea, #764ba2)" }}>
-              Retry
-            </Button>
+            <RunTestButton caseId={run.test_case_id} environmentId={run.environment_id} label="Rerun saved case" />
           )}
         </Stack>
       </Stack>

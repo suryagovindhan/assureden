@@ -58,11 +58,13 @@ class Flow(Base):
             postgresql_where="deleted_at IS NULL",
         ),
         CheckConstraint("version >= 1", name="ck_flows_version_positive"),
+        CheckConstraint("kind IN ('FLOW', 'BUSINESS_ACTION')", name="ck_flows_kind"),
     )
 
     id:          Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     org_id:      Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), nullable=False)
     name:        Mapped[str]            = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="FLOW", server_default="FLOW")
     description: Mapped[Optional[str]]  = mapped_column(Text, nullable=True)
     tags:        Mapped[Optional[str]]  = mapped_column(Text, nullable=True)   # JSON string
     version:     Mapped[int]            = mapped_column(Integer, nullable=False, default=1)

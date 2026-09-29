@@ -216,6 +216,8 @@ class AssetRevision(Base):
     __table_args__ = (
         Index("idx_revisions_asset", "asset_type", "asset_id"),
         Index("idx_revisions_org",   "org_id"),
+        Index("uix_flow_revision", "org_id", "asset_id", "revision", unique=True,
+              postgresql_where="asset_type = 'Flow'"),
     )
 
     id:             Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)

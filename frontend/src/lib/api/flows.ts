@@ -29,6 +29,7 @@ export interface FlowStep {
 }
 
 export interface Flow {
+  kind: "FLOW" | "BUSINESS_ACTION";
   id: string;
   org_id: string;
   name: string;
@@ -56,13 +57,15 @@ export const listFlows = (params?: { search?: string; offset?: number; limit?: n
   if (params?.search) qs.set("search", params.search);
   if (params?.offset !== undefined) qs.set("offset", String(params.offset));
   if (params?.limit !== undefined) qs.set("limit", String(params.limit));
-  return apiRequest<PaginatedFlows>(`/flows?${qs.toString()}`);
+  return apiRequest<PaginatedFlows>(`/flows/?${qs.toString()}`);
 };
 
 export const getFlow = (id: string) => apiRequest<Flow>(`/flows/${id}`);
+export const listFlowRevisions = (id: string) =>
+  apiRequest<{ version: number; name: string; checksum: string; step_count: number }[]>(`/flows/${id}/revisions`);
 
-export const createFlow = (body: { name: string; description?: string; tags?: string[] }) =>
-  apiRequest<Flow>("/flows", { method: "POST", body });
+export const createFlow = (body: { name: string; description?: string; tags?: string[]; kind?: "FLOW" | "BUSINESS_ACTION" }) =>
+  apiRequest<Flow>("/flows/", { method: "POST", body });
 
 export const updateFlow = (
   id: string,

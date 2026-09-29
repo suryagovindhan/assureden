@@ -47,7 +47,7 @@ export interface PaginatedEnvironments {
 
 export const listEnvironments = (params?: { offset?: number; limit?: number }) =>
   apiRequest<PaginatedEnvironments>(
-    `/environments?offset=${params?.offset ?? 0}&limit=${params?.limit ?? 100}`
+    `/environments/?offset=${params?.offset ?? 0}&limit=${params?.limit ?? 100}`
   );
 
 export const getEnvironment = (id: string) =>
@@ -59,7 +59,7 @@ export const createEnvironment = (body: {
   base_url?: string;
   tags?: string[];
   is_default?: boolean;
-}) => apiRequest<Environment>("/environments", { method: "POST", body });
+}) => apiRequest<Environment>("/environments/", { method: "POST", body });
 
 export const updateEnvironment = (
   id: string,

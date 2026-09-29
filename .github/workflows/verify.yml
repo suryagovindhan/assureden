@@ -43,6 +43,8 @@ jobs:
       JWT_SECRET_KEY: ci-only-secret-never-for-production-123456
       DEBUG: 'false'
       TESTING: 'true'
+      RUN_BROWSER_TESTS: '1'
+      RUN_CELERY_TESTS: '1'
     defaults:
       run:
         working-directory: backend
@@ -54,6 +56,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip install -r ../execution_agent/requirements.txt
+      - run: python -m playwright install --with-deps chromium
       - run: python -m alembic upgrade head
       - run: python -m scripts.seed_admin
       - run: python -m pytest tests -q

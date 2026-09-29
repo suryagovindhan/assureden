@@ -18,7 +18,7 @@ export type StepAction =
   | "SELECT" | "CHECK" | "UNCHECK"
   | "HOVER" | "SCROLL_TO" | "WAIT_FOR"
   | "NAVIGATE" | "SCREENSHOT" | "EXECUTE_SCRIPT"
-  | "DRAG_DROP" | "UPLOAD_FILE" | "PRESS_KEY";
+  | "DRAG_DROP" | "UPLOAD_FILE" | "PRESS_KEY" | "FLOW";
 
 export type AssertionType =
   | "VISIBLE" | "NOT_VISIBLE"
@@ -65,6 +65,8 @@ export interface StepAssertionRead {
 }
 
 export interface TestStepRead {
+  flow_id: string | null;
+  flow_version: number | null;
   id: string;
   org_id: string;
   test_case_id: string;
@@ -148,10 +150,12 @@ export interface TestCaseUpdate extends Partial<Omit<TestCaseCreate, "name">> {
 }
 
 export interface TestStepCreate {
+  flow_id?: string | null;
+  flow_version?: number | null;
   action: StepAction;
-  page_object_id?: string;
-  input_value?: string;
-  target_url?: string;
+  page_object_id?: string | null;
+  input_value?: string | null;
+  target_url?: string | null;
   description?: string;
   is_optional?: boolean;
   is_enabled?: boolean;

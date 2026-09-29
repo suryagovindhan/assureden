@@ -302,7 +302,12 @@ def update_step(
     case = case_repo.get_live(step.test_case_id, user.org_id)
     if not case:
         raise HTTPException(404, "Parent test case not found")
-    step = step_repo.update(step, case, user.id, case_repo, **body.model_dump(exclude_none=True))
+    values = body.model_dump(exclude_unset=True)
+    nullable = {"flow_id", "flow_version", "page_object_id", "input_value", "target_url",
+                "description", "execution_hint", "step_metadata"}
+    if any(v is None and k not in nullable for k, v in values.items()):
+        raise HTTPException(422, "Action, flags and timeout cannot be null")
+    step = step_repo.update(step, case, user.id, case_repo, **values)
     db.commit()
     sr = TestStepRead.model_validate(step)
     sr.assertions = []

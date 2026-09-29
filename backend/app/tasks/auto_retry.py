@@ -10,7 +10,8 @@ maybe_auto_retry() is called by:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy import select
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -87,6 +88,8 @@ def _find_root_run_id(db: Session, run: TestRun) -> uuid.UUID:
 
 def _count_retries(db: Session, original_run_id: uuid.UUID) -> int:
     """Count existing retry attempts for the root run."""
+    db.scalar(select(TestRun.id).where(TestRun.id == original_run_id).with_for_update())
+    db.flush()
     return (
         db.query(RetryRecord)
         .filter(RetryRecord.original_run_id == original_run_id)
@@ -113,6 +116,9 @@ def maybe_auto_retry(
 
     original_run_id = _find_root_run_id(db, run)
     existing_attempts = _count_retries(db, original_run_id)
+    # Only the latest attempt can create an automatic successor.
+    if existing_attempts != (run.retry_count or 0):
+        return None
     next_attempt = existing_attempts + 1
 
     if next_attempt > policy["max_retries"]:
@@ -133,6 +139,9 @@ def maybe_auto_retry(
         environment_id=run.environment_id,
         environment_version=run.environment_version,
         status=RunStatus.QUEUED,
+        available_after=utcnow() + timedelta(seconds=delay),
+        total_steps=run.total_steps,
+        variable_provenance=run.variable_provenance,
         priority=run.priority,
         triggered_by=run.triggered_by,
         run_variables=run.run_variables,
@@ -178,6 +187,8 @@ def manual_retry(db: Session, run: TestRun, triggered_by: uuid.UUID) -> TestRun:
         status=RunStatus.QUEUED,
         priority=run.priority,
         triggered_by=triggered_by,
+        total_steps=run.total_steps,
+        variable_provenance=run.variable_provenance,
         run_variables=run.run_variables,
         minimum_protocol_version=run.minimum_protocol_version,
         timeout_seconds=run.timeout_seconds,

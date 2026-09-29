@@ -76,6 +76,10 @@ def sample_test_case(db_session, sample_org):
     db_session.add(tc)
     db_session.commit()
     db_session.refresh(tc)
+    from app.models.test_cases import TestStep
+    db_session.add(TestStep(org_id=sample_org.id, test_case_id=tc.id, position=1,
+                            action="NAVIGATE", target_url="about:blank"))
+    db_session.commit()
     return tc
 
 

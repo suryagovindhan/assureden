@@ -3,14 +3,15 @@ api/flows/router.py — Phase 3: Reusable Flows API
 """
 
 import json
-from typing import Optional
+from typing import Optional, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import CurrentUser
+from app.core.dependencies import CurrentUser, require_role
+from app.models.test_cases import StepAction
 from app.db.session import get_db
 from app.db.repositories.flows import FlowRepository, FlowStepRepository
 
@@ -20,39 +21,40 @@ router = APIRouter(prefix="/flows", tags=["flows"])
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class FlowCreate(BaseModel):
-    name: str
+    kind: Literal["FLOW", "BUSINESS_ACTION"] = "FLOW"
+    name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
     tags: Optional[list[str]] = None
 
 
 class FlowUpdate(BaseModel):
-    expected_version: int
-    name: Optional[str] = None
+    expected_version: int = Field(ge=1)
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     tags: Optional[list[str]] = None
 
 
 class FlowDuplicate(BaseModel):
-    new_name: str
+    new_name: str = Field(min_length=1, max_length=200)
 
 
 class FlowStepCreate(BaseModel):
-    action: str
+    action: StepAction
     input_value: Optional[str] = None
-    target_url: Optional[str] = None
+    target_url: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = None
-    timeout_ms: int = 30000
+    timeout_ms: int = Field(30000, ge=100)
     is_optional: bool = False
     is_enabled: bool = True
     page_object_id: Optional[UUID] = None
 
 
 class FlowStepUpdate(BaseModel):
-    action: Optional[str] = None
+    action: Optional[StepAction] = None
     input_value: Optional[str] = None
-    target_url: Optional[str] = None
+    target_url: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = None
-    timeout_ms: Optional[int] = None
+    timeout_ms: Optional[int] = Field(None, ge=100)
     is_optional: Optional[bool] = None
     is_enabled: Optional[bool] = None
     page_object_id: Optional[UUID] = None
@@ -67,6 +69,7 @@ def _flow_out(flow, flow_repo: FlowRepository) -> dict:
         "id":                    str(flow.id),
         "org_id":                str(flow.org_id),
         "name":                  flow.name,
+        "kind":                  flow.kind,
         "description":           flow.description,
         "tags":                  flow_repo.get_tags(flow),
         "version":               flow.version,
@@ -113,7 +116,7 @@ def list_flows(
     return {"items": [_flow_out(f, repo) for f in flows], "total": total}
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 def create_flow(
     body: FlowCreate,
     current_user: CurrentUser = None,
@@ -121,14 +124,15 @@ def create_flow(
 ):
     from sqlalchemy.exc import IntegrityError
     repo = FlowRepository(db)
-    flow = repo.create(
-        org_id=current_user.org_id,
-        actor_id=current_user.id,
-        name=body.name,
-        description=body.description,
-        tags=body.tags,
-    )
     try:
+        flow = repo.create(
+            org_id=current_user.org_id,
+            actor_id=current_user.id,
+            name=body.name,
+            description=body.description,
+            tags=body.tags,
+            kind=body.kind,
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -138,6 +142,39 @@ def create_flow(
         )
     db.refresh(flow)
     return _flow_out(flow, repo)
+
+
+@router.get("/{flow_id}/revisions")
+def list_flow_revisions(flow_id: UUID, current_user: CurrentUser = None,
+                        db: Session = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.foundation import AssetRevision
+    flow = FlowRepository(db).get_live(flow_id, current_user.org_id)
+    if flow is None:
+        raise HTTPException(404, "Flow not found")
+    rows = db.scalars(select(AssetRevision).where(
+        AssetRevision.asset_type == "Flow", AssetRevision.asset_id == flow_id,
+        AssetRevision.org_id == current_user.org_id).order_by(AssetRevision.revision.desc())).all()
+    versions = [{"version": r.revision, "checksum": r.snapshot["checksum"],
+                 "name": r.snapshot["name"], "step_count": len(r.snapshot["steps"])} for r in rows]
+    if not any(r["version"] == flow.version for r in versions):
+        from app.services.flow_revisions import authored_snapshot
+        versions.insert(0, {"version": flow.version, "checksum": flow.checksum,
+                            "name": flow.name, "step_count": len(authored_snapshot(db, flow)["steps"])})
+    return versions
+
+
+@router.get("/{flow_id}/revisions/{version}")
+def get_flow_revision(flow_id: UUID, version: int, current_user: CurrentUser = None,
+                      db: Session = Depends(get_db)):
+    from app.services.flow_revisions import get_revision
+    flow = FlowRepository(db).get_live(flow_id, current_user.org_id)
+    if flow is None:
+        raise HTTPException(404, "Flow not found")
+    try:
+        return {"version": version, **get_revision(db, flow, version)}
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @router.get("/{flow_id}")
@@ -157,7 +194,7 @@ def get_flow(
     return result
 
 
-@router.put("/{flow_id}")
+@router.put("/{flow_id}", dependencies=[Depends(require_role("TESTER"))])
 def update_flow(
     flow_id: UUID,
     body: FlowUpdate,
@@ -175,7 +212,7 @@ def update_flow(
     return _flow_out(flow, repo)
 
 
-@router.delete("/{flow_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{flow_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("TESTER"))])
 def delete_flow(
     flow_id: UUID,
     current_user: CurrentUser = None,
@@ -189,7 +226,7 @@ def delete_flow(
     db.commit()
 
 
-@router.post("/{flow_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@router.post("/{flow_id}/duplicate", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 def duplicate_flow(
     flow_id: UUID,
     body: FlowDuplicate,
@@ -208,7 +245,7 @@ def duplicate_flow(
 
 # ── Flow Steps ────────────────────────────────────────────────────────────────
 
-@router.post("/{flow_id}/steps", status_code=status.HTTP_201_CREATED)
+@router.post("/{flow_id}/steps", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TESTER"))])
 def create_flow_step(
     flow_id: UUID,
     body: FlowStepCreate,
@@ -231,7 +268,7 @@ def create_flow_step(
     return _step_out(step)
 
 
-@router.put("/{flow_id}/steps/reorder")
+@router.put("/{flow_id}/steps/reorder", dependencies=[Depends(require_role("TESTER"))])
 def reorder_flow_steps(
     flow_id: UUID,
     body: ReorderRequest,
@@ -248,7 +285,7 @@ def reorder_flow_steps(
     return [_step_out(s) for s in steps]
 
 
-@router.put("/steps/{step_id}")
+@router.put("/steps/{step_id}", dependencies=[Depends(require_role("TESTER"))])
 def update_flow_step(
     step_id: UUID,
     body: FlowStepUpdate,
@@ -263,14 +300,17 @@ def update_flow_step(
     flow = flow_repo.get_live(step.flow_id, current_user.org_id)
     if flow is None:
         raise HTTPException(status_code=404, detail="Flow not found")
-    kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
+    kwargs = body.model_dump(exclude_unset=True)
+    nullable = {"input_value", "target_url", "description", "page_object_id"}
+    if any(v is None and k not in nullable for k, v in kwargs.items()):
+        raise HTTPException(422, "Action, flags and timeout cannot be null")
     step = step_repo.update(step, flow, current_user.id, flow_repo, **kwargs)
     db.commit()
     db.refresh(step)
     return _step_out(step)
 
 
-@router.delete("/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/steps/{step_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_role("TESTER"))])
 def delete_flow_step(
     step_id: UUID,
     current_user: CurrentUser = None,

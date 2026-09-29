@@ -510,18 +510,15 @@ def test_run_trigger(client: TestClient, db):
     from app.models.test_cases import TestCase, TestStep
     from app.models.foundation import Organization
 
-    # Get first live test case in the DB
+    # Own an executable fixture; an arbitrary case may contain no enabled steps.
     org = db.scalar(select(Organization).limit(1))
     if org is None:
         pytest.skip("No organization in DB — seed first")
-    tc = db.scalar(
-        select(TestCase).where(
-            TestCase.org_id == org.id,
-            TestCase.deleted_at.is_(None),
-        ).limit(1)
-    )
-    if tc is None:
-        pytest.skip("No test case in DB — create via API first")
+    tc = TestCase(org_id=org.id, name=_unique("trigger-case-"))
+    db.add(tc); db.flush()
+    db.add(TestStep(org_id=org.id, test_case_id=tc.id, position=1,
+                    action="NAVIGATE", target_url="about:blank"))
+    db.commit()
 
     token = _login(client)
     r = client.post(
@@ -763,63 +760,7 @@ def test_agent_poll_no_work(client: TestClient, db):
     assert "status" in r.json() or "execute_request" in r.json()
 
 
-# ─── 29. test_run_agent_update_idempotent ────────────────────────────────────
-
-def test_run_agent_update_idempotent(client: TestClient, db):
-    """Submitting the same step_result twice is idempotent — no duplicate rows."""
-    from sqlalchemy import select, func
-    from app.models.test_cases import TestCase
-    from app.models.foundation import Organization
-    from app.models.executions import TestRun, StepResult
-
-    org = db.scalar(select(Organization).limit(1))
-    if org is None:
-        pytest.skip("No organization in DB")
-    tc = db.scalar(
-        select(TestCase).where(
-            TestCase.org_id == org.id,
-            TestCase.deleted_at.is_(None),
-        ).limit(1)
-    )
-    if tc is None:
-        pytest.skip("No test case in DB")
-
-    token = _login(client)
-    run_r = client.post("/api/runs", json={"test_case_id": str(tc.id)}, headers=_headers(token))
-    if run_r.status_code != 201:
-        pytest.skip(f"Could not create run: {run_r.text}")
-
-    run_id = run_r.json()["id"]
-    snapshot = run_r.json()
-
-    # Get first step from snapshot via DB
-    from sqlalchemy import select as sel
-    run = db.scalar(sel(TestRun).where(TestRun.id == run_id))
-    if not run or not run.execution_snapshot:
-        pytest.skip("No snapshot")
-
-    steps = run.execution_snapshot.get("steps", [])
-    if not steps:
-        pytest.skip("No steps in snapshot")
-
-    exec_step_id = steps[0]["execution_step_id"]
-    step_id = steps[0]["step_id"]
-
-    # Register agent + get API key for update
-    agent_r = client.post(
-        "/api/agents/register",
-        json={"name": _unique("agent-upd-"), "max_parallel_sessions": 1},
-        headers=_headers(token),
-    )
-    if agent_r.status_code != 200:
-        pytest.skip(f"Could not register agent: {agent_r.text}")
-    raw_key = agent_r.json()["api_key"]
-    agent_headers = {"X-Agent-Api-Key": raw_key}
-
-    # We need a lease_id — fake one is OK for the idempotency test (will 409 on lease mismatch)
-    # So skip idempotency test if no lease
-    if not run.lease_id:
-        pytest.skip("Run not leased — agent poll required first")
+# Callback replay/fencing is covered by test_execution_contract.py.
 
 
 # ─── 30. test_snapshot_size_limit ────────────────────────────────────────────

@@ -1,358 +1,208 @@
-"""
-services/snapshot_builder.py — Phase 3: Immutable execution snapshot construction.
-
-The snapshot is the single source of truth for execution reproducibility.
-Secrets are NEVER stored in the snapshot; they appear only in the transient
-agent poll-response payload.
-
-Snapshot structure (snapshot_schema_version=1):
-  {
-    "snapshot_schema_version": 1,
-    "execution_plan_version": 1,
-    "test_case_version": N,
-    "environment_id": "uuid" | null,
-    "environment_version": N | null,   (informational)
-    "flow_versions": {"flow-uuid": {"version": N, "checksum": "hex"}},
-    "steps": [
-      {
-        "execution_step_id": "uuid",   (generated here; identifies expanded instance)
-        "position": N,                  (flattened 1-based index)
-        "step_id": "uuid",             (authored step identity)
-        "step_version": N,
-        "action": "CLICK",
-        "display_value": "...",         (input_value with secrets = ****)
-        "locator_snapshot": {...} | null
-      }
-    ],
-    "resolved_variables": {"KEY": "value"},  (non-secret only)
-    "secret_variable_keys": ["PASSWORD"],
-    "variable_provenance": {"KEY": "environment"|"run_override"|"base_url"}
-  }
-
-Size limits: MAX_EXPANDED_STEPS and MAX_SNAPSHOT_BYTES (from settings).
-"""
-
+"""Immutable authored execution plans; secrets enter only the transient payload."""
 import hashlib
 import json
-import uuid as _uuid_module
-from typing import Optional, Any
+from copy import deepcopy
+from uuid import UUID, uuid4
+from types import SimpleNamespace
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.services.variable_resolver import (
-    build_env_map, validate_step_variables, ValidationReport, ValidationIssue,
+    build_env_map, resolve_value, VariableResolutionError, ValidationReport,
 )
 
-SNAPSHOT_SCHEMA_VERSION = 1
-EXECUTION_PLAN_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 2
+EXECUTION_PLAN_VERSION = 2
 
 
-def _uuid4() -> str:
-    return str(_uuid_module.uuid4())
-
-
-def _locator_snapshot(page_object, db: Session) -> Optional[dict]:
-    """
-    Freeze the current locator state for a PageObject.
-    Returns None if page_object is None or deleted.
-    """
-    if page_object is None:
+def _locator_snapshot(object_id, db, org_id):
+    if not object_id:
         return None
-    # Import here to avoid circular imports
-    from app.models.object_repository import Page, Module, Application
-    page = db.get(Page, page_object.page_id)
+    from app.models.object_repository import PageObject, Page, Module, Application
+    obj = db.get(PageObject, object_id)
+    if obj is None or obj.deleted_at is not None or obj.org_id != org_id:
+        raise ValueError("Referenced page object is unavailable in this organization")
+    page = db.get(Page, obj.page_id)
     module = db.get(Module, page.module_id) if page else None
-    app = db.get(Application, module.application_id) if module else None
-
-    return {
-        "page_object_id":      str(page_object.id),
-        "page_object_version": getattr(page_object, "version", 1),
-        "page_version":        getattr(page, "version", 1) if page else None,
-        "module_version":      getattr(module, "version", 1) if module else None,
-        "application_version": getattr(app, "version", 1) if app else None,
-        "strategy":            page_object.locator_type,
-        "selector":            page_object.selector,
-        "fallbacks":           [],   # future: alternative locators
-    }
-
-
-def _expand_flow_steps(
-    flow_id: str,
-    flow_version: int,
-    db: Session,
-    base_position: int,
-    flow_versions: dict,
-    org_id,
-) -> tuple[list[dict], int]:
-    """
-    Expand a FLOW reference into its ordered FlowStep records.
-    Returns (expanded_step_dicts, next_position).
-    """
-    from app.models.flows import Flow, FlowStep
-    from sqlalchemy import select
-
-    flow = db.get(Flow, flow_id)
-    if flow is None or flow.deleted_at is not None:
-        raise ValueError(f"Flow {flow_id} not found")
-
-    # Record this flow's version + checksum
-    flow_versions[str(flow_id)] = {
-        "version": flow_version,
-        "checksum": flow.checksum,
-    }
-
-    steps_q = (
-        select(FlowStep)
-        .where(
-            FlowStep.flow_id == flow.id,
-            FlowStep.deleted_at.is_(None),
-            FlowStep.is_enabled.is_(True),
-        )
-        .order_by(FlowStep.position)
+    application = db.get(Application, module.application_id) if module else None
+    if any(x is None or x.deleted_at is not None or x.org_id != org_id
+           for x in (page, module, application)):
+        raise ValueError("Referenced page object has an unavailable parent")
+    locators = sorted(
+        [deepcopy(x) for x in (obj.locators or []) if x.get("is_active", True)],
+        key=lambda x: (not x.get("is_primary", False), x.get("priority", 1)),
     )
-    flow_steps = list(db.scalars(steps_q).all())
-
-    expanded: list[dict] = []
-    pos = base_position
-    for fs in flow_steps:
-        po = db.get(__import__("app.models.object_repository", fromlist=["PageObject"]).PageObject, fs.page_object_id) if fs.page_object_id else None
-        expanded.append({
-            "execution_step_id": _uuid4(),
-            "position":          pos,
-            "step_id":           str(fs.id),
-            "step_version":      fs.version,
-            "action":            fs.action,
-            "display_value":     fs.input_value or "",
-            "locator_snapshot":  _locator_snapshot(po, db),
-            "from_flow_id":      str(flow_id),
-            "from_flow_version": flow_version,
-        })
-        pos += 1
-    return expanded, pos
-
-
-def build_snapshot(
-    *,
-    test_case,
-    steps: list,           # live TestStep ORM objects (enabled, non-deleted)
-    environment=None,      # Environment ORM object or None
-    env_variables: list,   # EnvironmentVariable ORM objects
-    run_variables: dict,   # run-level overrides (plaintext)
-    db: Session,
-) -> tuple[dict, ValidationReport]:
-    """
-    Build the immutable execution snapshot for a test run.
-
-    Returns:
-        (snapshot_dict, validation_report)
-
-    Raises:
-        ValueError if size limits are exceeded.
-    """
-    # ── Variable maps ───────────────────────────────────────────
-    env_plain_all  = build_env_map(env_variables, include_secrets=True)   # for agent payload
-    env_plain_safe = build_env_map(env_variables, include_secrets=False)  # for snapshot
-
-    base_url = getattr(environment, "base_url", None)
-    env_id   = str(environment.id) if environment else None
-    env_ver  = getattr(environment, "version", None)
-
-    # Determine provenance
-    variable_provenance: dict[str, str] = {}
-    resolved_vars_safe: dict[str, str] = {}
-    secret_keys: list[str] = []
-
-    for var in env_variables:
-        if var.deleted_at is not None:
-            continue
-        if var.key in run_variables:
-            variable_provenance[var.key] = "run_override"
-        else:
-            variable_provenance[var.key] = "environment"
-        if var.is_secret:
-            secret_keys.append(var.key)
-            resolved_vars_safe[var.key] = "****"
-        else:
-            resolved_vars_safe[var.key] = env_plain_safe.get(var.key, "")
-
-    for k in run_variables:
-        if k not in variable_provenance:
-            variable_provenance[k] = "run_override"
-        if k not in resolved_vars_safe:
-            resolved_vars_safe[k] = run_variables[k]
-
-    if base_url and "BASE_URL" not in resolved_vars_safe:
-        resolved_vars_safe["BASE_URL"] = base_url
-        variable_provenance["BASE_URL"] = "base_url"
-
-    # ── Validation ──────────────────────────────────────────────
-    errors: list[ValidationIssue] = []
-    warnings: list[ValidationIssue] = []
-
-    for idx, step in enumerate(steps, start=1):
-        issues = validate_step_variables(
-            step_index=idx,
-            fields={"input_value": step.input_value, "target_url": step.target_url},
-            run_vars=run_variables,
-            env_vars_plain=env_plain_safe,
-            base_url=base_url,
-        )
-        for issue in issues:
-            if issue.severity == "error":
-                errors.append(issue)
-            else:
-                warnings.append(issue)
-
-    # ── Expand steps (including FLOW references) ──────────────────
-    expanded_steps: list[dict] = []
-    flow_versions: dict = {}
-    pos = 1
-
-    for step in steps:
-        if step.action == "FLOW":
-            if not step.flow_id or not step.flow_version:
-                errors.append(ValidationIssue(
-                    step=pos, field="flow_id", variable=None,
-                    issue="MISSING", severity="error",
-                    message="Step action is FLOW but no flow_id or flow_version is set",
-                ))
-                continue
-            try:
-                expanded, pos = _expand_flow_steps(
-                    str(step.flow_id), step.flow_version, db, pos, flow_versions, test_case.org_id,
-                )
-                expanded_steps.extend(expanded)
-            except ValueError as exc:
-                errors.append(ValidationIssue(
-                    step=pos, field="flow_id", variable=None,
-                    issue="FLOW_VERSION_NOT_FOUND", severity="error",
-                    message=str(exc),
-                ))
-        else:
-            po = None
-            if step.page_object_id:
-                from app.models.object_repository import PageObject
-                po = db.get(PageObject, step.page_object_id)
-                if po is not None and po.deleted_at is not None:
-                    po = None
-
-            # Warn on deleted/missing page object
-            if step.page_object_id and po is None:
-                warnings.append(ValidationIssue(
-                    step=pos, field="page_object_id", variable=None,
-                    issue="DEPRECATED_LOCATOR", severity="warning",
-                    message=f"Page object for step {pos} is deleted or not found",
-                ))
-
-            expanded_steps.append({
-                "execution_step_id": _uuid4(),
-                "position":          pos,
-                "step_id":           str(step.id),
-                "step_version":      step.version,
-                "action":            step.action,
-                "display_value":     step.input_value or step.target_url or "",
-                "locator_snapshot":  _locator_snapshot(po, db) if po else None,
-            })
-            pos += 1
-
-    # ── Size guard ───────────────────────────────────────────────
-    if len(expanded_steps) > settings.MAX_EXPANDED_STEPS:
-        raise ValueError(
-            f"Execution plan has {len(expanded_steps)} steps, "
-            f"exceeding MAX_EXPANDED_STEPS={settings.MAX_EXPANDED_STEPS}"
-        )
-
-    snapshot: dict[str, Any] = {
-        "snapshot_schema_version":  SNAPSHOT_SCHEMA_VERSION,
-        "execution_plan_version":   EXECUTION_PLAN_VERSION,
-        "test_case_version":        test_case.version,
-        "environment_id":           env_id,
-        "environment_version":      env_ver,
-        "flow_versions":            flow_versions,
-        "steps":                    expanded_steps,
-        "resolved_variables":       resolved_vars_safe,
-        "secret_variable_keys":     secret_keys,
-        "variable_provenance":      variable_provenance,
+    if not locators:
+        raise ValueError("Referenced page object has no active locators")
+    primary, *fallbacks = locators
+    return {
+        "page_object_id": str(obj.id),
+        "strategy": primary["type"], "selector": primary["value"],
+        "fallbacks": [{"strategy": x["type"], "selector": x["value"]} for x in fallbacks],
     }
 
-    snapshot_json = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    if len(snapshot_json.encode("utf-8")) > settings.MAX_SNAPSHOT_BYTES:
-        raise ValueError(
-            f"Execution snapshot exceeds MAX_SNAPSHOT_BYTES={settings.MAX_SNAPSHOT_BYTES}"
-        )
 
-    sha256 = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+def _freeze_step(step, position, db, org_id):
+    locator = _locator_snapshot(step.page_object_id, db, org_id)
+    assertions = []
+    for assertion in getattr(step, "assertions", []):
+        if assertion.deleted_at is not None or not assertion.is_enabled:
+            continue
+        if assertion.org_id != org_id:
+            raise ValueError("Assertion belongs to another organization")
+        assertions.append({
+            "assertion_id": str(assertion.id), "position": assertion.position,
+            "assertion_type": assertion.assertion_type,
+            "expected_value": assertion.expected_value or "",
+            "attribute_name": assertion.attribute_name,
+            "is_negated": assertion.is_negated, "is_fatal": assertion.is_fatal,
+            "locator": _locator_snapshot(assertion.target_page_object_id, db, org_id) or locator,
+        })
+    return {
+        "execution_step_id": str(uuid4()), "position": position,
+        "step_id": str(step.id), "step_version": step.version, "action": step.action,
+        "input_template": (step.target_url or step.input_value or "") if step.action == "NAVIGATE"
+                          else (step.input_value or ""),
+        "locator_snapshot": locator,
+        "timeout_ms": getattr(step, "timeout_ms", 30000),
+        "is_optional": getattr(step, "is_optional", False),
+        "screenshot_on_failure": getattr(step, "screenshot_on_failure", True),
+        "execution_hint": deepcopy(getattr(step, "execution_hint", None) or {}),
+        "step_metadata": deepcopy(getattr(step, "step_metadata", None) or {}),
+        "assertions": sorted(assertions, key=lambda x: x["position"]),
+    }
 
-    report = ValidationReport(valid=len(errors) == 0, errors=errors, warnings=warnings)
-    snapshot["__sha256"] = sha256   # internal; exposed via TestRun.execution_snapshot_sha256
 
-    return snapshot, report
+def _resolve_tree(value, variables):
+    if isinstance(value, str):
+        return resolve_value(value, {}, variables, None)
+    if isinstance(value, list):
+        return [_resolve_tree(x, variables) for x in value]
+    if isinstance(value, dict):
+        return {k: _resolve_tree(v, variables) for k, v in value.items()}
+    return value
 
 
-def compute_snapshot_sha256(snapshot: dict) -> str:
-    """Re-compute SHA-256 from snapshot dict (excluding __sha256 key)."""
+def build_snapshot(*, test_case, steps, environment=None, env_variables,
+                   run_variables, db):
+    safe_vars = build_env_map(env_variables, include_secrets=False)
+    secret_keys = [v.key for v in env_variables if v.deleted_at is None and v.is_secret]
+    if set(secret_keys) & run_variables.keys():
+        raise ValueError("Secret overrides are not supported; update the environment secret instead")
+    # Scheduler retry policy and JSON/number datasets use JSON scalar values.
+    # Keep their persisted types, but interpolate deterministic text in the plan.
+    run_variables = {k: v if isinstance(v, str) else json.dumps(v, separators=(",", ":"), allow_nan=False)
+                     for k, v in run_variables.items()}
+    provenance = {k: "environment" for k in safe_vars}
+    safe_vars.update(run_variables)
+    provenance.update({k: "run_override" for k in run_variables})
+    if environment and environment.base_url and "BASE_URL" not in safe_vars:
+        safe_vars["BASE_URL"] = environment.base_url
+        provenance["BASE_URL"] = "base_url"
+
+    expanded, flow_versions = [], {}
+    for step in steps:
+        if step.action != "FLOW":
+            expanded.append(_freeze_step(step, len(expanded) + 1, db, test_case.org_id))
+            continue
+        from app.models.flows import Flow
+        from app.services.flow_revisions import get_revision
+        flow = db.get(Flow, step.flow_id) if step.flow_id else None
+        if flow is None or flow.deleted_at is not None or flow.org_id != test_case.org_id:
+            raise ValueError("Referenced flow is unavailable in this organization")
+        if any(a.deleted_at is None for a in getattr(step, "assertions", [])):
+            raise ValueError("Assertions on a FLOW reference are not supported; use a separate step")
+        if step.is_optional or step.timeout_ms != 30000 or any(
+            getattr(step, key, None) for key in ("page_object_id", "input_value", "target_url",
+                                                "execution_hint", "step_metadata")
+        ) or not step.screenshot_on_failure:
+            raise ValueError("Configure action settings on the flow's own steps")
+        revision = get_revision(db, flow, step.flow_version)
+        if not any(child["is_enabled"] for child in revision["steps"]):
+            raise ValueError("Pinned flow revision has no enabled steps")
+        flow_versions[f"{flow.id}:{step.flow_version}"] = {
+            "version": step.flow_version, "checksum": revision["checksum"]}
+        for authored in revision["steps"]:
+            if not authored["is_enabled"]:
+                continue
+            child = SimpleNamespace(**authored)
+            child.page_object_id = UUID(child.page_object_id) if child.page_object_id else None
+            if child.action == "FLOW":
+                raise ValueError("Nested flows are not supported")
+            frozen = _freeze_step(child, len(expanded) + 1, db, test_case.org_id)
+            frozen.update(from_asset_kind=revision.get("kind", "FLOW"), from_flow_id=str(flow.id), from_flow_version=step.flow_version,
+                          from_flow_step_id=str(step.id))
+            expanded.append(frozen)
+
+    if len(expanded) > settings.MAX_EXPANDED_STEPS:
+        raise ValueError(f"Execution plan exceeds MAX_EXPANDED_STEPS={settings.MAX_EXPANDED_STEPS}")
+    errors = []
+    for frozen in expanded:
+        try:
+            _resolve_tree(frozen, safe_vars)
+            frozen["display_value"] = _resolve_tree(frozen["input_template"], safe_vars)
+        except VariableResolutionError as exc:
+            exc.issue.step = frozen["position"]
+            exc.issue.field = "execution_step"
+            errors.append(exc.issue)
+            frozen["display_value"] = ""
+    snapshot = {
+        "snapshot_schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "execution_plan_version": EXECUTION_PLAN_VERSION,
+        "test_case_version": test_case.version,
+        "environment_id": str(environment.id) if environment else None,
+        "environment_version": environment.version if environment else None,
+        "flow_versions": flow_versions, "steps": expanded,
+        "resolved_variables": safe_vars, "secret_variable_keys": secret_keys,
+        "variable_provenance": provenance,
+    }
+    if len(json.dumps(snapshot, ensure_ascii=False).encode()) > settings.MAX_SNAPSHOT_BYTES:
+        raise ValueError(f"Execution snapshot exceeds MAX_SNAPSHOT_BYTES={settings.MAX_SNAPSHOT_BYTES}")
+    snapshot["__sha256"] = compute_snapshot_sha256(snapshot)
+    return snapshot, ValidationReport(valid=not errors, errors=errors)
+
+
+def compute_snapshot_sha256(snapshot):
     clean = {k: v for k, v in snapshot.items() if k != "__sha256"}
     canonical = json.dumps(clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def build_agent_payload(
-    *,
-    snapshot: dict,
-    env_variables: list,   # EnvironmentVariable ORM objects (for plaintext secrets)
-    run_variables: dict,
-    environment=None,
-    protocol_version: int,
-    run_id: str,
-    lease_id: str,
-    timeout_seconds: int,
-    test_case_id: str,
-    test_case_version: int,
-) -> dict:
-    """
-    Build the transient agent poll-response payload.
-    Includes plaintext secrets — never persisted.
-    """
-    env_id  = str(environment.id) if environment else None
-    env_ver = getattr(environment, "version", None)
-    base_url = getattr(environment, "base_url", None)
-
-    # Build fully resolved variable map (including secrets in plaintext)
-    env_all = build_env_map(env_variables, include_secrets=True)
-    all_vars = {}
-    if base_url:
-        all_vars["BASE_URL"] = base_url
-    all_vars.update(env_all)
-    all_vars.update(run_variables)  # run override wins
-
+def build_agent_payload(*, snapshot, env_variables, run_variables, environment=None,
+                        protocol_version, run_id, lease_id, timeout_seconds,
+                        test_case_id, test_case_version):
+    if snapshot.get("snapshot_schema_version") != SNAPSHOT_SCHEMA_VERSION:
+        raise ValueError("This run uses an obsolete snapshot; queue a new run")
+    variables = deepcopy(snapshot["resolved_variables"])
+    secret_keys = snapshot["secret_variable_keys"]
+    if secret_keys:
+        # Until secret revisions exist, refuse silent changes while queued.
+        if environment is None or environment.version != snapshot["environment_version"]:
+            raise ValueError("Secret environment changed after queueing; queue a new run")
+        secret_vars = [v for v in env_variables if v.key in secret_keys and v.is_secret]
+        secrets = build_env_map(secret_vars, include_secrets=True)
+        if set(secrets) != set(secret_keys):
+            raise ValueError("An execution secret is unavailable")
+        variables.update(secrets)
+    resolved = _resolve_tree(snapshot["steps"], variables)
+    plan = []
+    for authored, step in zip(snapshot["steps"], resolved):
+        step["resolved_input"] = step.pop("input_template")
+        step["locator"] = step.pop("locator_snapshot")
+        step["display_value"] = authored["display_value"]
+        plan.append(step)
     return {
         "protocol_version": protocol_version,
         "execute_request": {
-            "run_id":   run_id,
-            "lease_id": lease_id,
-            "execution_plan": {
-                "steps": [
-                    {
-                        "execution_step_id": s["execution_step_id"],
-                        "position":          s["position"],
-                        "action":            s["action"],
-                        "resolved_input":    s.get("display_value", ""),
-                        "locator":           s.get("locator_snapshot"),
-                        "timeout_ms":        30000,
-                        "is_optional":       False,
-                        "assertions":        [],
-                    }
-                    for s in snapshot.get("steps", [])
-                ],
-            },
-            "variables": all_vars,
+            "run_id": run_id, "lease_id": lease_id,
+            "execution_plan": {"version": EXECUTION_PLAN_VERSION, "steps": plan},
+            "variables": _resolve_tree(variables, variables),
             "metadata": {
-                "test_case_id":        test_case_id,
-                "test_case_version":   test_case_version,
-                "environment_id":      env_id,
-                "environment_version": env_ver,
-                "timeout_seconds":     timeout_seconds,
+                "test_case_id": test_case_id, "test_case_version": test_case_version,
+                "environment_id": snapshot["environment_id"],
+                "environment_version": snapshot["environment_version"],
+                "timeout_seconds": timeout_seconds,
             },
         },
     }

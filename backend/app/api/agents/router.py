@@ -3,6 +3,7 @@ api/agents/router.py — Agent registration, heartbeat, CRUD
 """
 
 from typing import Optional
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -68,13 +69,9 @@ class AgentResponse(BaseModel):
     max_parallel_sessions: int
     current_parallel_sessions: int
     status: str
-    last_heartbeat: Optional[str]
+    last_heartbeat: Optional[datetime]
 
     model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context):
-        if self.last_heartbeat and hasattr(self.last_heartbeat, "isoformat"):
-            self.last_heartbeat = self.last_heartbeat.isoformat()
 
 
 # ── Helper — resolve agent from API key header ────────────────────────────────

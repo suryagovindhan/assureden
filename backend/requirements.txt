@@ -12,7 +12,8 @@ psycopg2-binary>=2.9.9
 
 # ── Async / Task Queue ─────────────────────────────────────────
 celery>=5.3.6
-redis>=5.0.4
+# RESP2 defaults compatible with the supported local Redis 5 / CI Redis 7 servers.
+redis>=5.0.4,<6
 
 # ── Auth / Security ────────────────────────────────────────────
 python-jose[cryptography]>=3.3.0

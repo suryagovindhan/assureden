@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box, Typography, Button, Chip, IconButton, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -214,6 +215,7 @@ function RunDetailDialog({ runId, open, onClose }: { runId: string; open: boolea
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RunsPage() {
+  const navigate = useNavigate();
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -291,7 +293,7 @@ export default function RunsPage() {
               {runs.map((run) => (
                 <TableRow key={run.id} hover
                   sx={{ cursor: "pointer", "&:hover": { bgcolor: "#1e1e3a" } }}
-                  onClick={() => setSelected(run.id)}>
+                  onClick={() => navigate(`/runs/${run.id}`)}>
                   <TableCell sx={{ color: "#8b8bff", fontFamily: "monospace", fontSize: 11, borderBottom: "1px solid #1e1e3a" }}>
                     {run.id.slice(0, 8)}…
                   </TableCell>

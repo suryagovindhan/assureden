@@ -24,6 +24,7 @@ from app.db.base import utcnow
 from app.db.repositories.base import OrgScopedRepository
 from app.models.flows import Flow, FlowStep
 from app.models.foundation import AuditEvent
+from app.services.flow_revisions import lock_and_preserve, preserve_revision
 
 
 def _utcnow() -> datetime:
@@ -126,10 +127,12 @@ class FlowRepository(OrgScopedRepository[Flow]):
         name: str,
         description: Optional[str] = None,
         tags: Optional[list] = None,
+        kind: str = "FLOW",
     ) -> Flow:
         flow = Flow(
             org_id=org_id,
             name=name,
+            kind=kind,
             description=description,
             tags=_norm_tags(tags),
             version=1,
@@ -139,6 +142,7 @@ class FlowRepository(OrgScopedRepository[Flow]):
         self.db.add(flow)
         self.db.flush()
         _audit(self.db, org_id, actor_id, "CREATED", flow.id)
+        preserve_revision(self.db, flow)
         return flow
 
     def update(
@@ -148,6 +152,7 @@ class FlowRepository(OrgScopedRepository[Flow]):
         expected_version: int,
         **kwargs,
     ) -> Flow:
+        lock_and_preserve(self.db, flow)
         if flow.version != expected_version:
             raise HTTPException(
                 status_code=409,
@@ -165,9 +170,11 @@ class FlowRepository(OrgScopedRepository[Flow]):
         flow.updated_by = actor_id
         self.db.flush()
         _audit(self.db, flow.org_id, actor_id, "UPDATED", flow.id)
+        preserve_revision(self.db, flow)
         return flow
 
     def soft_delete(self, flow: Flow, actor_id: Optional[UUID]) -> Flow:
+        lock_and_preserve(self.db, flow)
         now = _utcnow()
         flow.deleted_at = now
         flow.deleted_by = actor_id
@@ -184,9 +191,11 @@ class FlowRepository(OrgScopedRepository[Flow]):
         new_name: str,
     ) -> Flow:
         """Clone a flow and all its active steps."""
+        lock_and_preserve(self.db, source_flow)
         new_flow = Flow(
             org_id=source_flow.org_id,
             name=new_name,
+            kind=source_flow.kind,
             description=source_flow.description,
             tags=source_flow.tags,
             version=1,
@@ -223,6 +232,7 @@ class FlowRepository(OrgScopedRepository[Flow]):
         new_flow.checksum = _compute_checksum(self.db, new_flow.id)
         self.db.flush()
         _audit(self.db, new_flow.org_id, actor_id, "CREATED", new_flow.id)
+        preserve_revision(self.db, new_flow)
         return new_flow
 
     def _get_live_steps(self, flow_id: UUID) -> list[FlowStep]:
@@ -238,6 +248,7 @@ class FlowRepository(OrgScopedRepository[Flow]):
         flow.version += 1
         flow.updated_by = actor_id
         flow.checksum = _compute_checksum(self.db, flow.id)
+        preserve_revision(self.db, flow)
 
     def get_tags(self, flow: Flow) -> list:
         if not flow.tags:
@@ -288,11 +299,13 @@ class FlowStepRepository:
         flow_repo: FlowRepository,
         **kwargs,
     ) -> FlowStep:
+        lock_and_preserve(self.db, flow)
         if kwargs.get("action") == self.FLOW_ACTION:
             raise HTTPException(
                 status_code=422,
                 detail="FlowStep action cannot be 'FLOW' — nested flows are not allowed in Phase 3",
             )
+        self._validate_object(flow, kwargs)
         pos = self.next_position(flow.id)
         step = FlowStep(
             org_id=flow.org_id,
@@ -316,11 +329,16 @@ class FlowStepRepository:
         flow_repo: FlowRepository,
         **kwargs,
     ) -> FlowStep:
+        lock_and_preserve(self.db, flow)
+        self.db.refresh(step)
+        if step.deleted_at is not None:
+            raise HTTPException(404, "Flow step not found")
         if kwargs.get("action") == self.FLOW_ACTION:
             raise HTTPException(
                 status_code=422,
                 detail="FlowStep action cannot be 'FLOW' — nested flows are not allowed in Phase 3",
             )
+        self._validate_object(flow, kwargs)
         for k, v in kwargs.items():
             setattr(step, k, v)
         step.version += 1
@@ -337,6 +355,10 @@ class FlowStepRepository:
         actor_id: Optional[UUID],
         flow_repo: FlowRepository,
     ) -> FlowStep:
+        lock_and_preserve(self.db, flow)
+        self.db.refresh(step)
+        if step.deleted_at is not None:
+            raise HTTPException(404, "Flow step not found")
         step.deleted_at = _utcnow()
         step.deleted_by = actor_id
         self.db.flush()
@@ -352,6 +374,7 @@ class FlowStepRepository:
         actor_id: Optional[UUID],
         flow_repo: FlowRepository,
     ) -> list[FlowStep]:
+        lock_and_preserve(self.db, flow)
         live_steps = {s.id: s for s in self.list_by_flow(flow.id, flow.org_id)}
         if len(ordered_step_ids) != len(set(ordered_step_ids)):
             raise HTTPException(status_code=422, detail="Duplicate step IDs in reorder request")
@@ -370,6 +393,14 @@ class FlowStepRepository:
         flow_repo._bump_version(flow, actor_id)
         self.db.flush()
         return [live_steps[sid] for sid in ordered_step_ids]
+
+    def _validate_object(self, flow, values):
+        if values.get("page_object_id"):
+            from app.services.snapshot_builder import _locator_snapshot
+            try:
+                _locator_snapshot(values["page_object_id"], self.db, flow.org_id)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
 
     def _renumber(self, flow_id: UUID) -> None:
         steps = list(self.db.scalars(

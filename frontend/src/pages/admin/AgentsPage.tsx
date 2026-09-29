@@ -1,11 +1,13 @@
 import {
-  Box, Typography, Table, TableBody, TableCell,
+  Box, Button, Typography, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, Chip,
   IconButton, CircularProgress, Tooltip, Avatar, LinearProgress,
 } from "@mui/material";
 import { Refresh, Delete, FiberManualRecord } from "@mui/icons-material";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../lib/api";
+import AgentSetup from "../../components/AgentSetup";
+import { Link } from "react-router-dom";
 
 interface Agent {
   id: string;
@@ -47,6 +49,11 @@ export default function AgentsPage() {
 
   const capacityPct = (a: Agent) =>
     Math.round((a.current_parallel_sessions / Math.max(a.max_parallel_sessions, 1)) * 100);
+  const displayStatus = (a: Agent) => {
+    const time = a.last_heartbeat;
+    return !time || Date.now() - new Date(/[Zz]|[+-]\d\d:\d\d$/.test(time) ? time : `${time}Z`).getTime() > 30000
+      ? 'OFFLINE' : a.status;
+  };
 
   return (
     <Box>
@@ -56,6 +63,10 @@ export default function AgentsPage() {
           <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.4)" }}>
             Real-time agent fleet — auto-refreshes every 15 s
           </Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <AgentSetup />
+          <Button component={Link} to="/drafts" variant="outlined">Record a test</Button>
         </Box>
         <Tooltip title="Refresh now">
           <IconButton
@@ -131,12 +142,12 @@ export default function AgentsPage() {
                 <TableCell>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                     <FiberManualRecord
-                      sx={{ fontSize: 10, color: STATUS_COLORS[agent.status] ?? "#757575" }}
+                      sx={{ fontSize: 10, color: STATUS_COLORS[displayStatus(agent)] ?? "#757575" }}
                     />
                     <Typography
-                      sx={{ fontSize: 13, fontWeight: 500, color: STATUS_COLORS[agent.status] }}
+                      sx={{ fontSize: 13, fontWeight: 500, color: STATUS_COLORS[displayStatus(agent)] }}
                     >
-                      {agent.status}
+                      {displayStatus(agent)}
                     </Typography>
                   </Box>
                 </TableCell>

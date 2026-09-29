@@ -348,6 +348,31 @@ class TestStepRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def _validate_flow(self, org_id, values, step=None):
+        def value(key, default=None):
+            return values.get(key, getattr(step, key, default))
+        if value("action") != "FLOW":
+            if values.get("flow_id") or values.get("flow_version"):
+                raise HTTPException(422, "Flow references require the FLOW action")
+            values.update(flow_id=None, flow_version=None)
+            return
+        from app.models.flows import Flow
+        from app.services.flow_revisions import get_revision
+        flow = self.db.get(Flow, value("flow_id")) if value("flow_id") else None
+        if flow is None or flow.org_id != org_id or flow.deleted_at is not None:
+            raise HTTPException(422, "Select an available flow in this organization")
+        try:
+            get_revision(self.db, flow, value("flow_version"))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if value("is_optional", False) or value("timeout_ms", 30000) != 30000:
+            raise HTTPException(422, "Configure optional behavior and timeouts on the flow's own steps")
+        if any(value(k) for k in ("page_object_id", "input_value", "target_url",
+                                  "execution_hint", "step_metadata")) or value("screenshot_on_failure", True) is False:
+            raise HTTPException(422, "Configure action settings on the flow's own steps")
+        if step and any(a.deleted_at is None for a in step.assertions):
+            raise HTTPException(422, "Remove assertions before converting this step to FLOW")
+
     def list_by_case(
         self, case_id: UUID, org_id: UUID, include_disabled: bool = False,
     ) -> list[TestStep]:
@@ -401,6 +426,7 @@ class TestStepRepository:
         case_repo: TestCaseRepository,
         **kwargs,
     ) -> TestStep:
+        self._validate_flow(case.org_id, kwargs)
         pos = self.next_position(case.id)
         step = TestStep(
             org_id=case.org_id,
@@ -423,6 +449,7 @@ class TestStepRepository:
         case_repo: TestCaseRepository,
         **kwargs,
     ) -> TestStep:
+        self._validate_flow(case.org_id, kwargs, step)
         for k, v in kwargs.items():
             setattr(step, k, v)
         step.version += 1
@@ -573,6 +600,8 @@ class StepAssertionRepository:
     def create(
         self, step: TestStep, actor_id: Optional[UUID], **kwargs
     ) -> StepAssertion:
+        if step.action == "FLOW":
+            raise HTTPException(422, "Assertions on FLOW references are not supported; use a separate step")
         pos = self.next_position(step.id)
         assertion = StepAssertion(
             org_id=step.org_id,

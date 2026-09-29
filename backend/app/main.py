@@ -57,6 +57,8 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from app.api.drafts import router as drafts_router
+    from app.api.agent_control import router as agent_control_router
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
@@ -74,6 +76,8 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth_router,  prefix="/api")
+    app.include_router(drafts_router, prefix="/api")
+    app.include_router(agent_control_router, prefix="/api")
     app.include_router(org_router,   prefix="/api")
     app.include_router(user_router,  prefix="/api")
     app.include_router(agent_router,       prefix="/api")

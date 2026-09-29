@@ -83,6 +83,7 @@ export interface PaginatedRuns {
 // ── Runs ──────────────────────────────────────────────────────────────────────
 
 export const triggerRun = (body: {
+  requested_agent_id?: string;
   test_case_id: string;
   environment_id?: string;
   run_variables?: Record<string, string>;

@@ -203,6 +203,8 @@ class StepAssertionRead(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestStepCreate(BaseModel):
+    flow_id: Optional[UUID] = None
+    flow_version: Optional[int] = Field(None, ge=1)
     action:                  StepAction
     page_object_id:          Optional[UUID]    = None
     input_value:             Optional[str]     = None
@@ -217,6 +219,8 @@ class TestStepCreate(BaseModel):
 
 
 class TestStepUpdate(BaseModel):
+    flow_id: Optional[UUID] = None
+    flow_version: Optional[int] = Field(None, ge=1)
     """version is NOT required for steps — only TestCase uses optimistic locking."""
     action:                  Optional[StepAction]   = None
     page_object_id:          Optional[UUID]         = None
@@ -232,6 +236,8 @@ class TestStepUpdate(BaseModel):
 
 
 class TestStepRead(BaseModel):
+    flow_id: Optional[UUID] = None
+    flow_version: Optional[int] = None
     id:                      UUID
     org_id:                  UUID
     test_case_id:            UUID
